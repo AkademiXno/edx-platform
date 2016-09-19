@@ -1,24 +1,35 @@
 <%page args="grade_summary, grade_cutoffs, graph_div_id, show_grade_breakdown = True, show_grade_cutoffs = True, **kwargs"/>
 <%!
-  import json
-  import math
+import json
+import math
 %>
 
 $(function () {
   function showTooltip(x, y, contents) {
-    $('<div id="tooltip">' + contents + '</div>').css( {
-      position: 'absolute',
-      display: 'none',
-      top: y + 5,
-      left: x + 15,
-      border: '1px solid #000',
-      padding: '4px 6px',
-      color: '#fff',
-      'background-color': '#333',
-      opacity: 0.90
-    }).appendTo("body").fadeIn(200);
-  }
+      var $tooltip_div = $('<div id="tooltip"></div>').css({
+              position: 'absolute',
+              display: 'none',
+              top: y + 5,
+              left: x + 15,
+              border: '1px solid #000',
+              padding: '4px 6px',
+              color: '#fff',
+              'background-color': '#222',
+              opacity: 0.90
+          });
 
+      edx.HtmlUtils.setHtml(
+          $tooltip_div,
+          edx.HtmlUtils.ensureHtml(contents)
+      );
+      
+      edx.HtmlUtils.append(
+          $('body'),
+          edx.HtmlUtils.HTML($tooltip_div)
+      );
+      
+      $('#tooltip').fadeIn(200);
+  }
   /* -------------------------------- Grade detail bars -------------------------------- */
     
   <%
@@ -71,7 +82,7 @@ $(function () {
   overviewBarX = tickIndex
   extraColorIndex = len(categories) #Keeping track of the next color to use for categories not in categories[]
   
-  if show_grade_breakdown:    
+  if show_grade_breakdown:
     for section in grade_summary['grade_breakdown']:
         if section['percent'] > 0:
             if section['category'] in categories:
@@ -115,6 +126,61 @@ $(function () {
   var droppedScores = ${ json.dumps(droppedScores) };
   var grade_cutoff_ticks = ${ json.dumps(grade_cutoff_ticks) }
   
+  var yAxisTooltips={};
+
+    /*
+    series looks like:
+    [
+        {
+            color: "#600101",
+            label: "Homework",
+            data: [[1, 0.06666666666666667], [2, 1], [3.25, .53]]
+        },
+        ...
+    ]
+
+    detail_tooltips looks like:
+    {
+        "Dropped Scores": [0: "The lowest 1...:],
+        "Homework": [
+            0: "Homework 1 -- Homework -- Question Styles 7% (1/15)",
+            1: "Homework 2 -- Homework -- Get Social 100% (1/1)",
+            2: "Homework Average = 53%"
+        ],
+        ...
+    }
+    */
+
+  // loop through the series and extract the matching tick and the series label
+  for (var seriesIndex = 0; seriesIndex < series.length; seriesIndex++) {
+      for (var dataIndex = 0; dataIndex < series[seriesIndex]['data'].length; dataIndex++) {
+          var tickIndex = series[seriesIndex]['data'][dataIndex][0];
+          // There may be more than one detail tooltip for a given tickIndex. If so,
+          // push the new tooltip on the existing list.
+          if (tickIndex in yAxisTooltips) {
+              yAxisTooltips[tickIndex].push(detail_tooltips[series[seriesIndex]['label']][dataIndex]);
+          }
+          else {
+              yAxisTooltips[tickIndex] = [detail_tooltips[series[seriesIndex]['label']][dataIndex]];
+          }
+          // If this item was a dropped score, add the tooltip message about that.
+          for (var droppedIndex = 0; droppedIndex < droppedScores.length; droppedIndex++) {
+              if (tickIndex == droppedScores[droppedIndex][0]) {
+                  yAxisTooltips[tickIndex].push(detail_tooltips["Dropped Scores"][droppedIndex]);
+              }
+          }
+      }
+  }
+
+  // hide the vertical axis since they are audibly lacking context
+  for (var i = 0; i < grade_cutoff_ticks.length; i++) {
+      grade_cutoff_ticks[i][1] = edx.HtmlUtils.joinHtml(
+          edx.HtmlUtils.HTML('<span aria-hidden="true">'),
+          grade_cutoff_ticks[i][1],
+          edx.HtmlUtils.HTML('</span>')
+      ).text;
+  }
+    
   //Always be sure that one series has the xaxis set to 2, or the second xaxis labels won't show up
   series.push( {label: 'Dropped Scores', data: droppedScores, points: {symbol: "cross", show: true, radius: 3}, bars: {show: false}, color: "#333"} );
   
@@ -128,13 +194,65 @@ $(function () {
     markings.push({yaxis: {from: ascending_grades[i], to: ascending_grades[i+1]}, color: colors[(i-1) % colors.length]});
 
   var options = {
-    series: {stack: true,
-              lines: {show: false, steps: false },
-              bars: {show: true, barWidth: 0.8, align: 'center', lineWidth: 0, fill: .8 },},
-    xaxis: {tickLength: 0, min: 0.0, max: ${tickIndex - sectionSpacer}, ticks: ticks, labelAngle: 90},
-    yaxis: {ticks: grade_cutoff_ticks, min: 0.0, max: 1.0, labelWidth: 100},
-    grid: { hoverable: true, clickable: true, borderWidth: 1, markings: markings },
-    legend: {show: false},
+    series: {
+        stack: true,
+        lines: {
+            show: false,
+            steps: false
+        },
+        bars: {
+            show: true,
+            barWidth: 0.8,
+            align: 'center',
+            lineWidth: 0,
+            fill: .8
+        }
+    },
+    xaxis: {
+        tickLength: 0,
+        min: 0.0,
+        max: ${tickIndex - sectionSpacer},
+        ticks: function() {
+            for (var i = 0; i < ticks.length; i++) {
+                var tickLabel = edx.HtmlUtils.joinHtml(
+                    // The very last tick will be for the total, and it usually is composed of a number of different
+                    // grading types. To help clarify, do NOT make the label ("Total") aria-hidden in that case.
+                    edx.HtmlUtils.HTML(i < ticks.length - 1 ? '<span aria-hidden="true">' : '<span>'),
+                    ticks[i][1],
+                    edx.HtmlUtils.HTML('</span>')
+                );
+                var elementTooltips = yAxisTooltips[ticks[i][0]];
+                if (elementTooltips) {
+                    for (var tooltipIndex = 0; tooltipIndex < elementTooltips.length; tooltipIndex++) {
+                        tickLabel = edx.HtmlUtils.joinHtml(
+                            tickLabel,
+                            edx.HtmlUtils.HTML('<span class="sr">'),
+                            elementTooltips[tooltipIndex],
+                            edx.HtmlUtils.HTML('</span>')
+                        )
+                    }
+                }
+                ticks[i][1] = tickLabel;
+            }
+            return ticks;
+        },
+        labelAngle: 90
+    },
+    yaxis: {
+        ticks: grade_cutoff_ticks,
+        min: 0.0,
+        max: 1.0,
+        labelWidth: 100
+    },
+    grid: {
+        hoverable: true,
+        clickable: true,
+        borderWidth: 1,
+        markings: markings
+    },
+    legend: {
+        show: false
+    }
   };
   
   var $grade_detail_graph = $("#${graph_div_id}");
@@ -143,9 +261,22 @@ $(function () {
     
     %if show_grade_breakdown:
       var o = plot.pointOffset({x: ${overviewBarX} , y: ${totalScore}});
-      $grade_detail_graph.append('<div style="position:absolute;left:' + (o.left - 12) + 'px;top:' + (o.top - 20) + 'px">${"{totalscore:.0%}".format(totalscore=totalScore)}</div>');
+
+      edx.HtmlUtils.append(
+          $grade_detail_graph,
+          edx.HtmlUtils.joinHtml(
+              edx.HtmlUtils.HTML('<div class="overallGrade" style="position:absolute;left:' + (o.left - 12) + 'px;top:' + (o.top - 20) + 'px">'),
+              edx.HtmlUtils.HTML('<span class=sr>'),
+              gettext('Overall Score'),
+              edx.HtmlUtils.HTML('</span>'),
+              '${'{totalscore:.0%}'.format(totalscore=totalScore)}',
+              edx.HtmlUtils.HTML('</div>')
+          )
+      );
+
     %endif
   }
+  
       
   var previousPoint = null;
   $grade_detail_graph.bind("plothover", function (event, pos, item) {
@@ -154,14 +285,13 @@ $(function () {
     if (item) {
       if (previousPoint != (item.dataIndex, item.seriesIndex)) {
         previousPoint = (item.dataIndex, item.seriesIndex);
-            
+
         $("#tooltip").remove();
             
         if (item.series.label in detail_tooltips) {
           var series_tooltips = detail_tooltips[item.series.label];
           if (item.dataIndex < series_tooltips.length) {
             var x = item.datapoint[0].toFixed(2), y = item.datapoint[1].toFixed(2);
-                
             showTooltip(item.pageX, item.pageY, series_tooltips[item.dataIndex]);
           }
         }
