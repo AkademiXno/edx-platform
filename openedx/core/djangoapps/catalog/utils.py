@@ -120,7 +120,7 @@ def munge_catalog_program(catalog_program):
     }
 
 
-def get_course_runs(user, course_keys=[]):  # pylint: disable=dangerous-default-value
+def get_course_runs(user, course_keys=None):
     """
     Get a course run's data from the course catalog service.
 
@@ -131,33 +131,35 @@ def get_course_runs(user, course_keys=[]):  # pylint: disable=dangerous-default-
     Returns:
         dict, empty if no data could be retrieved.
     """
-    course_catalog_data_dict = cache.get_many(course_keys)
-    if len(course_catalog_data_dict.keys()) != len(course_keys):
-        found_keys = course_catalog_data_dict.keys()
-        for key in course_keys:
-            if key in found_keys:
-                course_keys.remove(key)
-        log.debug("Catalog data not found in cache against Course Keys: '{}'".format(",".join(course_keys)))
+    course_catalog_data_dict = {}
+    if course_keys:
+        course_catalog_data_dict = cache.get_many(course_keys)
+        if len(course_catalog_data_dict.keys()) != len(course_keys):
+            found_keys = course_catalog_data_dict.keys()
+            for key in course_keys:
+                if key in found_keys:
+                    course_keys.remove(key)
+            log.debug("Catalog data not found in cache against Course Keys: '{}'".format(",".join(course_keys)))
 
-        catalog_integration = CatalogIntegration.current()
-        if catalog_integration.enabled:
-            api = course_discovery_api_client(user)
+            catalog_integration = CatalogIntegration.current()
+            if catalog_integration.enabled:
+                api = course_discovery_api_client(user)
 
-            catalog_data = get_edx_api_data(
-                catalog_integration,
-                user,
-                'course_runs',
-                api=api,
-                querystring={'keys': ",".join(course_keys), 'exclude_utm': 1},
-            )
-            if catalog_data:
-                for catalog_course_run in catalog_data:
-                    cache.set(catalog_course_run["key"], catalog_course_run, None)
-                    course_catalog_data_dict[catalog_course_run["key"]] = catalog_course_run
+                catalog_data = get_edx_api_data(
+                    catalog_integration,
+                    user,
+                    'course_runs',
+                    api=api,
+                    querystring={'keys': ",".join(course_keys), 'exclude_utm': 1},
+                )
+                if catalog_data:
+                    for catalog_course_run in catalog_data:
+                        cache.set(catalog_course_run["key"], catalog_course_run, None)
+                        course_catalog_data_dict[catalog_course_run["key"]] = catalog_course_run
     return course_catalog_data_dict
 
 
-def get_run_marketing_urls(user, course_keys=[]):  # pylint: disable=dangerous-default-value
+def get_run_marketing_urls(user, course_keys=None):
     """
     Get a course run's marketing URL from the course catalog service.
 
@@ -174,21 +176,9 @@ def get_run_marketing_urls(user, course_keys=[]):  # pylint: disable=dangerous-d
     if not course_catalog_dict:
         return course_marketing_url_dict
 
-    for course_key in course_keys:
-        if course_key in course_catalog_dict:
-            marketing_url = course_catalog_dict[course_key].get('marketing_url')
-            # This URL may include unwanted UTM parameters in the querystring.
-            # For more, see https://en.wikipedia.org/wiki/UTM_parameters.
-            course_marketing_url_dict[course_key] = strip_querystring(marketing_url) if marketing_url else None
+    if course_keys:
+        for course_key in course_keys:
+            if course_key in course_catalog_dict:
+                course_marketing_url_dict[course_key] = course_catalog_dict[course_key].get('marketing_url')
 
     return course_marketing_url_dict
-
-
-def strip_querystring(url):
-    """Strip the querystring from the provided URL.
-
-    urlparse's ParseResult is a subclass of namedtuple. _replace is part of namedtuple's
-    public API: https://docs.python.org/2/library/collections.html#collections.somenamedtuple._replace.
-    The name starts with an underscore to prevent conflicts with field names.
-    """
-    return urlparse(url)._replace(query='').geturl()  # pylint: disable=no-member

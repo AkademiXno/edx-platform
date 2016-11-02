@@ -308,18 +308,3 @@ class TestGetRunMarketingUrl(TestCase, mixins.CatalogIntegrationMixin):
         }):
             course_marketing_url_dict = utils.get_run_marketing_urls(self.user, self.course_keys)
             self.assertEqual(expected_data, course_marketing_url_dict)
-
-
-@ddt.ddt
-class TestStripQuerystring(TestCase):
-    """
-    Tests covering querystring stripping.
-    """
-    bare_url = 'https://www.example.com/path'
-
-    @ddt.data(
-        bare_url,
-        bare_url + '?foo=bar&baz=qux',
-    )
-    def test_strip_querystring(self, url):
-        self.assertEqual(utils.strip_querystring(url), self.bare_url)
