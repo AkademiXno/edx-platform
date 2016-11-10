@@ -120,6 +120,19 @@ def munge_catalog_program(catalog_program):
     }
 
 
+def _get_catalog_course_run_cache_key(course_key):
+        """
+        Returns key name to use to cache catalog course run data for course key.
+        """
+        return "catalog.course_runs.{}".format(course_key)
+
+def _get_course_key_from_catalog_course_run_cache_key(catalog_course_run_cache_key):
+        """
+        Returns course_key extracted from cache key of catalog course run data.
+        """
+        return catalog_course_run_cache_key[20:]
+
+
 def get_course_runs(user, course_keys=None):
     """
     Get a course run's data from the course catalog service.
@@ -133,9 +146,25 @@ def get_course_runs(user, course_keys=None):
     """
     course_catalog_data_dict = {}
     if course_keys:
-        course_catalog_data_dict = cache.get_many(course_keys)
-        if len(course_catalog_data_dict.keys()) != len(course_keys):
-            found_keys = course_catalog_data_dict.keys()
+        cached_course_keys = [
+            _get_catalog_course_run_cache_key(course_key)
+            for course_key in course_keys
+        ]
+
+        cached_course_catalog_data = cache.get_many(cached_course_keys)
+        course_catalog_data_dict = [
+
+        ]
+        if len(cached_course_catalog_data.keys()) != len(course_keys):
+            found_keys = []
+            for cached_key in cached_course_catalog_data.keys():
+                course_key = _get_course_key_from_catalog_course_run_cache_key(cached_key)
+                found_keys
+            #found_keys = course_catalog_data_dict.keys()
+            # found_keys = [
+            #     _get_course_key_from_catalog_course_run_cache_key(cached_key)
+            #     for cached_key in course_catalog_data_dict.keys()
+            # ]
             for key in course_keys:
                 if key in found_keys:
                     course_keys.remove(key)
@@ -154,7 +183,11 @@ def get_course_runs(user, course_keys=None):
                 )
                 if catalog_data:
                     for catalog_course_run in catalog_data:
-                        cache.set(catalog_course_run["key"], catalog_course_run, None)
+                        cache.set(
+                            _get_catalog_course_run_cache_key(catalog_course_run["key"]),
+                            catalog_course_run,
+                            None
+                        )
                         course_catalog_data_dict[catalog_course_run["key"]] = catalog_course_run
     return course_catalog_data_dict
 

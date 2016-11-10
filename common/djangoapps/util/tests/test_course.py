@@ -63,3 +63,35 @@ class CourseAboutLinkTestCase(CatalogIntegrationMixin, CacheIsolationTestCase):
                 "https://marketing-url/course/course-title-foo-bar-baz"
             )
             self.assertEqual(0, mock_method.call_count)
+
+    @mock.patch.dict('django.conf.settings.FEATURES', {'ENABLE_MKTG_SITE': True})
+    def test_about_page_marketing_url_cached(self):
+        course_marketing_url_dict = {
+            "foo1/bar1/baz1": "https://marketing-url/course/course-title-foo1-bar1-baz1",
+            "foo2/bar2/baz2": "https://marketing-url/course/course-title-foo2-bar2-baz2",
+        }
+        self.assertEquals(
+            get_link_for_about_page("foo1/bar1/baz1", self.user, course_marketing_url_dict),
+            "https://marketing-url/course/course-title-foo1-bar1-baz1"
+        )
+
+    @mock.patch.dict('django.conf.settings.FEATURES', {'ENABLE_MKTG_SITE': True})
+    def test_about_page_marketing_url_not_cached(self):
+        course_marketing_url_dict = {
+            "foo1/bar1/baz1": "https://marketing-url/course/course-title-foo1-bar1-baz1",
+            "foo2/bar2/baz2": "https://marketing-url/course/course-title-foo2-bar2-baz2",
+        }
+        self.register_catalog_course_run_response(["foo3/bar3/baz3"], [
+            {
+                "key": "foo3/bar3/baz3",
+                "marketing_url": "https://marketing-url/course/course-title-foo3/bar3/baz3"
+            },
+            {
+                "key": "foo4/bar4/baz4",
+                "marketing_url": "https://marketing-url/course/course-title-foo4/bar4/baz4"
+            },
+        ])
+        self.assertEquals(
+            get_link_for_about_page("foo3/bar3/baz3", self.user, course_marketing_url_dict),
+            "https://marketing-url/course/course-title-foo3/bar3/baz3"
+        )
