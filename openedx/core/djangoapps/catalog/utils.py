@@ -1,6 +1,6 @@
 """Helper functions for working with the catalog service."""
+import abc
 import logging
-from urlparse import urlparse
 
 from django.conf import settings
 from django.core.cache import cache
@@ -120,98 +120,149 @@ def munge_catalog_program(catalog_program):
     }
 
 
-def _get_catalog_course_run_cache_key(course_key):
-        """
-        Returns key name to use to cache catalog course run data for course key.
-        """
-        return "catalog.course_runs.{}".format(course_key)
+def get_course_runs_from_catalog_and_cache_it(user, course_keys):
+    """
+    Get course run's data from the course catalog service and cache it.
+    """
+    catalog_course_runs_against_course_keys = {}
+    catalog_integration = CatalogIntegration.current()
+    if catalog_integration.enabled:
+        api = course_discovery_api_client(user)
 
-def _get_course_key_from_catalog_course_run_cache_key(catalog_course_run_cache_key):
-        """
-        Returns course_key extracted from cache key of catalog course run data.
-        """
-        return catalog_course_run_cache_key[20:]
+        catalog_data = get_edx_api_data(
+            catalog_integration,
+            user,
+            'course_runs',
+            api=api,
+            querystring={'keys': ",".join(course_keys), 'exclude_utm': 1},
+        )
+        if catalog_data:
+            for catalog_course_run in catalog_data:
+                CatalogCourseRunCacheUtility.cache_course_run(catalog_course_run)
+                catalog_course_runs_against_course_keys[catalog_course_run["key"]] = catalog_course_run
+    return catalog_course_runs_against_course_keys
 
 
 def get_course_runs(user, course_keys=None):
     """
-    Get a course run's data from the course catalog service.
+    Get course run data from the course catalog service if not available in cache.
 
     Arguments:
-        course_keys (CourseKey): A list of Course key object identifying the run whose data we want.
+        course_keys ([String]): A list of Course key strings identifying the run whose data we want.
         user (User): The user to authenticate as when making requests to the catalog service.
 
     Returns:
-        dict, empty if no data could be retrieved.
+        dict of catalog course runs against course keys, empty if no data could be retrieved.
     """
-    course_catalog_data_dict = {}
+    catalog_course_runs_against_course_keys = {}
     if course_keys:
-        cached_course_keys = [
-            _get_catalog_course_run_cache_key(course_key)
-            for course_key in course_keys
-        ]
+        catalog_course_runs_against_course_keys = CatalogCourseRunCacheUtility.get_cached_catalog_course_runs(
+            course_keys
+        )
+        if len(catalog_course_runs_against_course_keys.keys()) != len(course_keys):
+            missing_course_keys = CatalogCourseRunCacheUtility.get_course_keys_not_found_in_cache(
+                course_keys, catalog_course_runs_against_course_keys.keys()
+            )
+            catalog_course_runs_against_course_keys.update(
+                get_course_runs_from_catalog_and_cache_it(user, missing_course_keys)
+            )
 
-        cached_course_catalog_data = cache.get_many(cached_course_keys)
-        course_catalog_data_dict = [
-
-        ]
-        if len(cached_course_catalog_data.keys()) != len(course_keys):
-            found_keys = []
-            for cached_key in cached_course_catalog_data.keys():
-                course_key = _get_course_key_from_catalog_course_run_cache_key(cached_key)
-                found_keys
-            #found_keys = course_catalog_data_dict.keys()
-            # found_keys = [
-            #     _get_course_key_from_catalog_course_run_cache_key(cached_key)
-            #     for cached_key in course_catalog_data_dict.keys()
-            # ]
-            for key in course_keys:
-                if key in found_keys:
-                    course_keys.remove(key)
-            log.debug("Catalog data not found in cache against Course Keys: '{}'".format(",".join(course_keys)))
-
-            catalog_integration = CatalogIntegration.current()
-            if catalog_integration.enabled:
-                api = course_discovery_api_client(user)
-
-                catalog_data = get_edx_api_data(
-                    catalog_integration,
-                    user,
-                    'course_runs',
-                    api=api,
-                    querystring={'keys': ",".join(course_keys), 'exclude_utm': 1},
-                )
-                if catalog_data:
-                    for catalog_course_run in catalog_data:
-                        cache.set(
-                            _get_catalog_course_run_cache_key(catalog_course_run["key"]),
-                            catalog_course_run,
-                            None
-                        )
-                        course_catalog_data_dict[catalog_course_run["key"]] = catalog_course_run
-    return course_catalog_data_dict
+    return catalog_course_runs_against_course_keys
 
 
-def get_run_marketing_urls(user, course_keys=None):
+def get_run_marketing_url(user, course_key):
     """
     Get a course run's marketing URL from the course catalog service.
 
     Arguments:
-        course_key (CourseKey): Course key object identifying the run whose marketing URL we want.
+          course_key (String): Course key string identifying the run whose marketing URL we want.
+
+    Returns:
+          string, the marketing URL, or None if no URL is available.
+    """
+    course_marketing_urls = get_run_marketing_urls(user, [course_key])
+    return course_marketing_urls.get(course_key)
+
+
+def get_run_marketing_urls(user, course_keys=None):
+    """
+    Get course run marketing URLs from the course catalog service against course keys.
+
+    Arguments:
+        course_keys ([String]): A list of Course key strings identifying the run whose data we want.
         user (User): The user to authenticate as when making requests to the catalog service.
 
     Returns:
-        string, the marketing URL, or None if no URL is available.
+        dict of run marketing URLs against course keys
     """
-
-    course_marketing_url_dict = {}
+    course_marketing_urls = {}
     course_catalog_dict = get_course_runs(user, course_keys)
     if not course_catalog_dict:
-        return course_marketing_url_dict
+        return course_marketing_urls
 
     if course_keys:
         for course_key in course_keys:
             if course_key in course_catalog_dict:
-                course_marketing_url_dict[course_key] = course_catalog_dict[course_key].get('marketing_url')
+                course_marketing_urls[course_key] = course_catalog_dict[course_key].get('marketing_url')
 
-    return course_marketing_url_dict
+    return course_marketing_urls
+
+
+class CatalogCourseRunCacheUtility:
+    """
+    Non-instantiatable Class that contains all utility methods for Catalog
+    Course Run Cache.
+    """
+    __metaclass__ = abc.ABCMeta
+    CACHE_KEY_PREFIX = "catalog.course_runs."
+
+    @classmethod
+    def get_cache_key_name(cls, course_key):
+        """
+        Returns key name to use to cache catalog course run data for course key.
+        """
+        return "{}{}".format(cls.CACHE_KEY_PREFIX, course_key)
+
+    @classmethod
+    def extract_course_key_from_cache_key_name(cls, catalog_course_run_cache_key):
+        """
+        Returns course_key extracted from cache key of catalog course run data.
+        """
+        return catalog_course_run_cache_key.replace(cls.CACHE_KEY_PREFIX, '')
+
+    @classmethod
+    def get_course_keys_not_found_in_cache(cls, course_keys, cached_course_run_keys):
+        """
+        Get course key strings for which course run data is not available in cache.
+        """
+        missing_course_keys = list(set(course_keys) - set(cached_course_run_keys))
+        log.debug("Catalog course run data not found in cache against Course Keys: '{}'".format(
+            ", ".join(missing_course_keys)
+        ))
+        return missing_course_keys
+
+    @classmethod
+    def get_cached_catalog_course_runs(cls, course_keys):
+        """
+        Get course runs from cache against course keys
+        """
+        course_catalog_run_cache_keys = [
+            cls.get_cache_key_name(course_key)
+            for course_key in course_keys
+        ]
+        cached_catalog_course_runs = cache.get_many(course_catalog_run_cache_keys)
+        return {
+            cls.extract_course_key_from_cache_key_name(cached_key): cached_course_run
+            for cached_key, cached_course_run in cached_catalog_course_runs.iteritems()
+        }
+
+    @classmethod
+    def cache_course_run(cls, catalog_course_run):
+        """
+        Caches catalog course run for course key.
+        """
+        cache.set(
+            cls.get_cache_key_name(catalog_course_run["key"]),
+            catalog_course_run,
+            None
+        )

@@ -511,10 +511,19 @@ class TestCourseEnrollmentSerializer(MobileAPITestCase, MilestonesTestCaseMixin,
                 "test_key": "test_value",
             }]
         )
-        CourseEnrollmentSerializer.set_course_catalog(self.request.user, course_keys)
+        catalog_course_runs_against_course_keys = CourseEnrollmentSerializer.get_course_catalog_run(
+            self.request.user, course_keys
+        )
+        enrollment = CourseEnrollment.enrollments_for_user(self.user)[0]
         serialized = CourseEnrollmentSerializer(
-            CourseEnrollment.enrollments_for_user(self.user)[0],
-            context={'request': self.request},
+            enrollment,
+            context={
+                'request': self.request,
+                "catalog_course_run": (
+                    catalog_course_runs_against_course_keys[unicode(enrollment.course_id)]
+                    if unicode(enrollment.course_id) in catalog_course_runs_against_course_keys else None
+                )
+            },
         ).data
         self.assertEqual(
             serialized['course']['course_about'], "https://marketing-url/course/course-title-{}".format(course_id)
@@ -532,10 +541,19 @@ class TestCourseEnrollmentSerializer(MobileAPITestCase, MilestonesTestCaseMixin,
                 "test_key": "test_value",
             }]
         )
-        CourseEnrollmentSerializer.set_course_catalog(self.request.user, course_keys)
+        catalog_course_runs_against_course_keys = CourseEnrollmentSerializer.get_course_catalog_run(
+            self.request.user, course_keys
+        )
+        enrollment = CourseEnrollment.enrollments_for_user(self.user)[0]
         serialized = CourseEnrollmentSerializer(
-            CourseEnrollment.enrollments_for_user(self.user)[0],
-            context={'request': self.request},
+            enrollment,
+            context={
+                'request': self.request,
+                "catalog_course_run": (
+                    catalog_course_runs_against_course_keys[unicode(enrollment.course_id)]
+                    if unicode(enrollment.course_id) in catalog_course_runs_against_course_keys else None
+                )
+            },
         ).data
         self.assertEqual(
             serialized['course']['course_about'], "http://localhost:8000/courses/{}/about".format(course_id)

@@ -6,8 +6,7 @@ from rest_framework import serializers
 from rest_framework.reverse import reverse
 
 from courseware.access import has_access
-from openedx.core.djangoapps.catalog.utils import get_run_marketing_urls
-import request_cache
+from openedx.core.djangoapps.catalog.utils import get_course_runs
 from student.models import CourseEnrollment, User
 from certificates.api import certificate_downloadable_status
 from util.course import get_link_for_about_page
@@ -19,7 +18,6 @@ class CourseOverviewField(serializers.RelatedField):
     """
 
     def to_representation(self, course_overview):
-        request_cache_dict = request_cache.get_cache('course_enrollment')
         course_id = unicode(course_overview.id)
         request = self.context.get('request')
         return {
@@ -55,9 +53,7 @@ class CourseOverviewField(serializers.RelatedField):
                 }
             },
             'course_image': course_overview.course_image_url,
-            'course_about': get_link_for_about_page(
-                course_id, request.user, request_cache_dict.get('course_marketing_url_dict')
-            ),
+            'course_about': get_link_for_about_page(course_id, request.user, self.context.get('catalog_course_run')),
             'course_updates': reverse(
                 'course-updates-list',
                 kwargs={'course_id': course_id},
@@ -90,14 +86,13 @@ class CourseEnrollmentSerializer(serializers.ModelSerializer):
     certificate = serializers.SerializerMethodField()
 
     @classmethod
-    def set_course_catalog(cls, user, course_ids):
+    def get_course_catalog_run(cls, user, course_keys):
         """
-        Gets catalog data for all courses that need serialization in single API call and caches a dict of
-        course marketing URL against course key.
+        Returns catalog runs against courses if marketing site is enabled.
         """
-        request_cache_dict = request_cache.get_cache('course_enrollment')
-        if settings.FEATURES.get('ENABLE_MKTG_SITE') and not request_cache_dict.get('course_marketing_url_dict'):
-            request_cache_dict['course_marketing_url_dict'] = get_run_marketing_urls(user, course_ids)
+        if settings.FEATURES.get('ENABLE_MKTG_SITE'):
+            return get_course_runs(user, course_keys)
+        return {}
 
     def get_certificate(self, model):
         """

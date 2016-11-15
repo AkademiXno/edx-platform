@@ -3,9 +3,11 @@ URLs for user API
 """
 from django.conf.urls import patterns, url
 from django.conf import settings
+from rest_framework.routers import SimpleRouter
 
 from .views import UserDetail, UserCourseEnrollmentsList, UserCourseStatus
 
+ROUTER = SimpleRouter()
 
 urlpatterns = patterns(
     'mobile_api.users.views',
