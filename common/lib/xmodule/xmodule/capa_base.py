@@ -28,6 +28,7 @@ from .fields import Timedelta, Date
 from django.utils.timezone import UTC
 from xmodule.capa_base_constants import RANDOMIZATION, SHOWANSWER
 from django.conf import settings
+from uuid import uuid4
 
 from openedx.core.djangolib.markup import HTML, Text
 
@@ -1056,7 +1057,7 @@ class CapaMixin(CapaFields):
 
         return answers
 
-    def publish_grade(self, only_if_higher=None):
+    def publish_grade(self, only_if_higher=None, grade_update_root_id=None, grade_update_root_type=None):
         """
         Publishes the student's current grade to the system as an event
         """
@@ -1068,6 +1069,8 @@ class CapaMixin(CapaFields):
                 'value': score['score'],
                 'max_value': score['total'],
                 'only_if_higher': only_if_higher,
+                'grade_update_root_id': grade_update_root_id,
+                'grade_update_root_type': grade_update_root_type,
             }
         )
 
@@ -1440,8 +1443,9 @@ class CapaMixin(CapaFields):
         # rescoring should have no effect on attempts, so don't
         # need to increment here, or mark done.  Just save.
         self.set_state_from_lcp()
-
-        self.publish_grade(only_if_higher)
+        grade_update_root_id = unicode(uuid4())
+        grade_update_root_type = u'edx.grades.problem.rescored'
+        self.publish_grade(only_if_higher, grade_update_root_id, grade_update_root_type)
 
         new_score = self.lcp.get_score()
         event_info['new_score'] = new_score['score']
@@ -1460,7 +1464,15 @@ class CapaMixin(CapaFields):
         event_info['attempts'] = self.attempts
         self.track_function_unmask('problem_rescore', event_info)
 
-        return {'success': success}
+        return {
+            'success': success,
+            'original_weighted_earned': orig_score['score'],
+            'new_weighted_earned': new_score['score'],
+            'original_weighted_possible': orig_score['total'],
+            'new_weighted_possible': new_score['total'],
+            'grade_update_root_id': grade_update_root_id,
+            'grade_update_root_type': grade_update_root_type,
+        }
 
     def save_problem(self, data):
         """

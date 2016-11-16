@@ -1843,6 +1843,8 @@ class TestXmoduleRuntimeEvent(TestSubmittingProblems):
             'course_id': unicode(self.course.id),
             'usage_id': unicode(self.problem.location),
             'only_if_higher': None,
+            'grade_update_root_type': None,
+            'grade_update_root_id': None,
         }
         send_mock.assert_called_with(**expected_signal_kwargs)
 

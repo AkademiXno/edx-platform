@@ -17,7 +17,9 @@ import logging
 
 from django.db import models
 from django.utils.timezone import now
+from eventtracking import tracker
 from model_utils.models import TimeStampedModel
+from uuid import uuid4
 
 from coursewarehistoryextended.fields import UnsignedBigIntAutoField
 from opaque_keys.edx.keys import CourseKey, UsageKey
@@ -305,7 +307,7 @@ class PersistentSubsectionGrade(TimeStampedModel):
         )
 
     @classmethod
-    def update_or_create_grade(cls, **kwargs):
+    def update_or_create_grade(cls, grade_update_root_id=None, grade_update_root_type=None, **kwargs):
         """
         Wrapper for objects.update_or_create.
         """
@@ -320,15 +322,20 @@ class PersistentSubsectionGrade(TimeStampedModel):
             usage_key=usage_key,
             defaults=kwargs,
         )
+
+        cls._emit_grade_calculated_event(grade, grade_update_root_id, grade_update_root_type)
         return grade
 
     @classmethod
-    def create_grade(cls, **kwargs):
+    def create_grade(cls, grade_update_root_id=None, grade_update_root_type=None,  **kwargs):
         """
         Wrapper for objects.create.
         """
         cls._prepare_params_and_visible_blocks(kwargs)
-        return cls.objects.create(**kwargs)
+
+        grade = cls.objects.create(**kwargs)
+        cls._emit_grade_calculated_event(grade, grade_update_root_id, grade_update_root_type)
+        return grade
 
     @classmethod
     def bulk_create_grades(cls, grade_params_iter, course_key):
@@ -375,6 +382,27 @@ class PersistentSubsectionGrade(TimeStampedModel):
         """
         params['visible_blocks_id'] = params['visible_blocks'].hash_value
         del params['visible_blocks']
+
+    @staticmethod
+    def _emit_grade_calculated_event(grade, grade_update_root_id, grade_update_root_type):
+        tracker.emit(
+            u'edx.grades.subsection.grade_calculated',
+            {
+                'user_id': unicode(grade.user_id),
+                'course_id': unicode(grade.course_id),
+                'block_id': unicode(grade.usage_key),
+                'course_version': unicode(grade.course_version),
+                'weighted_total_earned': grade.earned_all,
+                'weighted_total_possible': grade.possible_all,
+                'weighted_graded_earned': grade.earned_graded,
+                'weighted_graded_possible': grade.possible_graded,
+                'first_attempted': unicode(grade.first_attempted),
+                'subtree_edited_timestamp': unicode(grade.subtree_edited_timestamp),
+                'grade_update_root_id': unicode(grade_update_root_id),
+                'grade_update_root_type': unicode(grade_update_root_type),
+                'visible_blocks_hash': unicode(grade.visible_blocks_id),
+            }
+        )
 
 
 class PersistentCourseGrade(TimeStampedModel):
@@ -445,6 +473,9 @@ class PersistentCourseGrade(TimeStampedModel):
         Returns a PersistedCourseGrade object.
         """
         passed = kwargs.pop('passed')
+        grade_update_root_id = kwargs.pop('grade_update_root_id')
+        grade_update_root_type = kwargs.pop('grade_update_root_type')
+
         if kwargs.get('course_version', None) is None:
             kwargs['course_version'] = ""
 
@@ -456,4 +487,22 @@ class PersistentCourseGrade(TimeStampedModel):
         if passed and not grade.passed_timestamp:
             grade.passed_timestamp = now()
             grade.save()
+        cls._emit_grade_calculated_event(grade, grade_update_root_id, grade_update_root_type)
         return grade
+
+    @staticmethod
+    def _emit_grade_calculated_event(grade, grade_update_root_id, grade_update_root_type):
+        tracker.emit(
+            u'edx.grades.course.grade_calculated',
+            {
+                'user_id': unicode(grade.user_id),
+                'course_id': unicode(grade.course_id),
+                'course_version': unicode(grade.course_version),
+                'percent_grade': grade.percent_grade,
+                'letter_grade': unicode(grade.letter_grade),
+                'course_edited_timestamp': unicode(grade.course_edited_timestamp),
+                'grade_update_root_id': grade_update_root_id,
+                'grade_update_root_type': grade_update_root_type,
+                'grading_policy_hash': unicode(grade.grading_policy_hash),
+            }
+        )

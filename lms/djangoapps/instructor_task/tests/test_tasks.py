@@ -74,7 +74,9 @@ class TestInstructorTasks(InstructorTaskModuleTestCase):
         Calculate dummy values for parameters needed for instantiating xmodule instances.
         """
         return {'xqueue_callback_url_prefix': 'dummy_value',
-                'request_info': {},
+                'request_info': {
+                    'username': 'dummy_username'
+                },
                 }
 
     def _run_task_with_mock_celery(self, task_class, entry_id, task_id, expected_failure_message=None):
@@ -263,7 +265,17 @@ class TestRescoreInstructorTask(TestInstructorTasks):
         self._create_students_with_state(num_students, input_state)
         task_entry = self._create_input_entry()
         mock_instance = Mock()
-        mock_instance.rescore_problem = Mock(return_value={'success': 'correct'})
+        mock_instance.rescore_problem = Mock(
+            return_value={
+                'success': 'correct',
+                'original_weighted_earned': 1,
+                'new_weighted_earned': 1,
+                'original_weighted_possible': 1,
+                'new_weighted_possible': 1,
+                'grade_update_root_id': 'x',
+                'grade_update_root_type': 'y',
+            }
+        )
         with patch('lms.djangoapps.instructor_task.tasks_helper.get_module_for_descriptor_internal') as mock_get_module:
             mock_get_module.return_value = mock_instance
             self._run_task_with_mock_celery(rescore_problem, task_entry.id, task_entry.task_id)

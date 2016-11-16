@@ -5,26 +5,21 @@ Runs tasks on answers to course problems to validate that code
 paths actually work.
 
 """
-from collections import namedtuple
-import ddt
 import json
 import logging
-from mock import patch
-from nose.plugins.attrib import attr
 import textwrap
+from collections import namedtuple
+from uuid import uuid4
 
+import ddt
+from bson.tz_util import utc
+from capa.responsetypes import StudentInputError
+from capa.tests.response_xml_factory import (CodeResponseXMLFactory,
+                                             CustomResponseXMLFactory)
 from celery.states import SUCCESS, FAILURE
 from django.contrib.auth.models import User
 from django.core.urlresolvers import reverse
-
-from openedx.core.djangoapps.util.testing import TestConditionalContent
-from capa.tests.response_xml_factory import (CodeResponseXMLFactory,
-                                             CustomResponseXMLFactory)
-from xmodule.modulestore.tests.factories import ItemFactory
-from xmodule.modulestore import ModuleStoreEnum
-
-from courseware.model_data import StudentModule
-
+from lms.djangoapps.grades.new.course_grade import CourseGradeFactory
 from lms.djangoapps.instructor_task.api import (
     submit_rescore_problem_for_all_students,
     submit_rescore_problem_for_student,
@@ -39,10 +34,15 @@ from lms.djangoapps.instructor_task.tests.test_base import (
     OPTION_1,
     OPTION_2,
 )
-from capa.responsetypes import StudentInputError
-from lms.djangoapps.grades.new.course_grade import CourseGradeFactory
+from mock import patch
+from nose.plugins.attrib import attr
+from openedx.core.djangoapps.util.testing import TestConditionalContent
 from openedx.core.lib.url_utils import quote_slashes
+from xmodule.modulestore import ModuleStoreEnum
+from xmodule.modulestore.django import modulestore
+from xmodule.modulestore.tests.factories import ItemFactory
 
+from courseware.model_data import StudentModule
 
 log = logging.getLogger(__name__)
 
@@ -197,6 +197,36 @@ class TestRescoringTask(TestIntegrationTask):
         self.submit_rescore_all_student_answers('instructor', problem_url_name, rescore_if_higher)
         for i, user in enumerate(self.users):
             self.check_state(user, descriptor, new_expected_scores[i], new_expected_max)
+
+    def verify_rescore_for_one_student(self, problem_edit, new_expected_scores, new_expected_max, rescore_if_higher):
+        """
+        Common helper to verify the results of rescoring for a single
+        student and all students are as expected.
+        """
+        # get descriptor:
+        problem_url_name = 'H1P1'
+        self.define_option_problem(problem_url_name)
+        location = InstructorTaskModuleTestCase.problem_location(problem_url_name)
+        descriptor = self.module_store.get_item(location)
+
+        # first store answers for each of the separate users:
+        self.submit_student_answer('u1', problem_url_name, [OPTION_1, OPTION_1])
+
+        # verify each user's grade
+        expected_original_scores = (2, 1, 1, 0)
+        expected_original_max = 2
+        self.check_state(self.user1, descriptor, 2, expected_original_max)
+
+        # update the data in the problem definition so the answer changes.
+        self.redefine_option_problem(problem_url_name, **problem_edit)
+
+        # confirm that simply rendering the problem again does not change the grade
+        self.render_problem('u1', problem_url_name)
+        self.check_state(self.user1, descriptor, expected_original_scores[0], expected_original_max)
+
+        # rescore the problem for only one student -- only that student's grade should change:
+        self.submit_rescore_one_student_answer('instructor', problem_url_name, self.user1, rescore_if_higher)
+        self.check_state(self.user1, descriptor, new_expected_scores[0], new_expected_max)
 
     RescoreTestData = namedtuple('RescoreTestData', 'edit, new_expected_scores, new_expected_max')
 
@@ -395,6 +425,53 @@ class TestRescoringTask(TestIntegrationTask):
         # all grades should change to being wrong (with no change in attempts)
         for user in self.users:
             self.check_state(user, descriptor, 0, 1, expected_attempts=2)
+
+    @patch('xmodule.capa_base.uuid4')
+    @patch('lms.djangoapps.instructor_task.tasks_helper.tracker')
+    @patch('lms.djangoapps.grades.models.tracker')
+    def test_rescoring_events(self, grades_tracker, instructor_task_tracker, capa_uuid):
+        problem_edit = dict(correct_answer=OPTION_2)
+        new_expected_scores = (0, 1, 1, 2)
+        new_expected_max = 2
+        capa_uuid.return_value = uuid4()
+        self.verify_rescore_for_one_student(
+            problem_edit, new_expected_scores, new_expected_max, rescore_if_higher=False,
+        )
+
+        instructor_task_tracker.emit.assert_called_with(
+            u'edx.grades.problem.rescored',
+            {
+                'course_id': unicode(self.course.id),
+                'user_id': unicode(self.user1.id),
+                'problem_id': unicode(InstructorTaskModuleTestCase.problem_location('H1P1')),
+                'original_weighted_earned': 2,
+                'new_weighted_earned': 0,
+                'original_weighted_possible': 2,
+                'new_weighted_possible': 2,
+                'only_if_higher': False,
+                'instructor_id': u'instructor',
+                'grade_update_root_id': unicode(capa_uuid.return_value),
+                'grade_update_root_type': u'edx.grades.problem.rescored',
+            }
+        )
+
+        # re-retrieve the course from the modulestore to get
+        # most recent edit timestamp
+        course = modulestore().get_course(self.course.id, depth=0)
+        grades_tracker.emit.assert_called_with(
+            u'edx.grades.course.grade_calculated',
+            {
+                'course_version': u'',
+                'percent_grade': 0.0,
+                'grading_policy_hash': u'ChVp0lHGQGCevD0t4njna/C44zQ=',
+                'user_id': unicode(self.user1.id),
+                'letter_grade': u'',
+                'grade_update_root_id': unicode(capa_uuid.return_value),
+                'grade_update_root_type': u'edx.grades.problem.rescored',
+                'course_id': unicode(self.course.id),
+                'course_edited_timestamp': unicode(course.subtree_edited_on.replace(tzinfo=utc)),
+            }
+        )
 
 
 class TestResetAttemptsTask(TestIntegrationTask):

@@ -11,6 +11,7 @@ from django.conf import settings
 from eventtracking import tracker
 from itertools import chain
 from time import time
+from uuid import uuid4
 import unicodecsv
 import logging
 
@@ -519,6 +520,7 @@ def rescore_problem_module_state(xmodule_instance_args, module_descriptor, stude
 
         result = instance.rescore_problem(only_if_higher=task_input['only_if_higher'])
         instance.save()
+
         if 'success' not in result:
             # don't consider these fatal, but false means that the individual call didn't complete:
             TASK_LOG.warning(
@@ -555,7 +557,25 @@ def rescore_problem_module_state(xmodule_instance_args, module_descriptor, stude
                     student=student
                 )
             )
-            return UPDATE_STATUS_SUCCEEDED
+
+            tracker.emit(
+                unicode(result['grade_update_root_type']),
+                {
+                    'course_id': unicode(course_id),
+                    'user_id': unicode(student.id),
+                    'problem_id': unicode(usage_key),
+                    'original_weighted_earned': result['original_weighted_earned'],
+                    'new_weighted_earned': result['new_weighted_earned'],
+                    'original_weighted_possible': result['original_weighted_possible'],
+                    'new_weighted_possible': result['new_weighted_possible'],
+                    'only_if_higher': task_input['only_if_higher'],
+                    'instructor_id': unicode(xmodule_instance_args['request_info']['username']),
+                    'grade_update_root_id': unicode(result['grade_update_root_id']),
+                    'grade_update_root_type': unicode(result['grade_update_root_type']),
+                }
+            )
+
+        return UPDATE_STATUS_SUCCEEDED
 
 
 @outer_atomic

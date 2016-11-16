@@ -11,9 +11,11 @@ from django.conf import settings
 from django.core.urlresolvers import reverse
 from django.core.mail import send_mail
 from django.utils.translation import override as override_language
+from uuid import uuid4
 
 from course_modes.models import CourseMode
 from courseware.models import StudentModule
+from eventtracking import tracker
 from edxmako.shortcuts import render_to_string
 from lms.djangoapps.grades.scores import weighted_score
 from lms.djangoapps.grades.signals.signals import PROBLEM_SCORE_CHANGED
@@ -267,7 +269,27 @@ def reset_student_attempts(course_id, student, module_state_key, requesting_user
 
     if delete_module:
         module_to_reset.delete()
-        _fire_score_changed_for_block(course_id, student, block, module_state_key)
+        grade_update_root_id = uuid4()
+        grade_update_root_type = u'edx.grades.problem.state_deleted'
+        tracker.emit(
+            grade_update_root_type,
+            {
+                'user_id': unicode(student.id),
+                'course_id': unicode(course_id),
+                'problem_id': unicode(module_state_key),
+                'instructor_id': unicode(requesting_user.username),
+                'grade_update_root_id': unicode(grade_update_root_id),
+                'grade_update_root_type': grade_update_root_type,
+            }
+        )
+        _fire_score_changed_for_block(
+            course_id,
+            student,
+            block,
+            module_state_key,
+            grade_update_root_id,
+            grade_update_root_type
+        )
     else:
         _reset_module_attempts(module_to_reset)
 
@@ -288,7 +310,14 @@ def _reset_module_attempts(studentmodule):
     studentmodule.save()
 
 
-def _fire_score_changed_for_block(course_id, student, block, module_state_key):
+def _fire_score_changed_for_block(
+        course_id,
+        student,
+        block,
+        module_state_key,
+        grade_update_root_id,
+        grade_update_root_type
+):
     """
     Fires a PROBLEM_SCORE_CHANGED event for the given module. The earned points are
     always zero. We must retrieve the possible points from the XModule, as
@@ -310,6 +339,8 @@ def _fire_score_changed_for_block(course_id, student, block, module_state_key):
         user_id=student.id,
         course_id=unicode(course_id),
         usage_id=unicode(module_state_key),
+        grade_update_root_id=grade_update_root_id,
+        grade_update_root_type=grade_update_root_type,
         score_deleted=True,
     )
 
