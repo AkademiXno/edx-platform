@@ -1,10 +1,12 @@
 """
 This file contains celery tasks for email marketing signal handler.
 """
+import json
 import logging
 import time
 
 from celery import task
+from django.contrib.sites.models import Site
 from django.core.cache import cache
 
 from email_marketing.models import EmailMarketingConfiguration
@@ -18,7 +20,7 @@ log = logging.getLogger(__name__)
 
 # pylint: disable=not-callable
 @task(bind=True, default_retry_delay=3600, max_retries=24)
-def update_user(self, sailthru_vars, email, new_user=False, activation=False):
+def update_user(self, sailthru_vars, email, site_domain, new_user=False, activation=False):
     """
     Adds/updates Sailthru profile information for a user.
      Args:
@@ -37,7 +39,8 @@ def update_user(self, sailthru_vars, email, new_user=False, activation=False):
     try:
         sailthru_response = sailthru_client.api_post("user",
                                                      _create_sailthru_user_parm(sailthru_vars, email,
-                                                                                new_user, email_config))
+                                                                                new_user, email_config,
+                                                                                site_domain))
 
     except SailthruClientError as exc:
         log.error("Exception attempting to add/update user %s in Sailthru - %s", email, unicode(exc))
@@ -111,7 +114,7 @@ def update_user_email(self, new_email, old_email):
                              max_retries=email_config.sailthru_max_retries)
 
 
-def _create_sailthru_user_parm(sailthru_vars, email, new_user, email_config):
+def _create_sailthru_user_parm(sailthru_vars, email, new_user, email_config, site_domain):
     """
     Create sailthru user create/update parms
     """
@@ -120,7 +123,13 @@ def _create_sailthru_user_parm(sailthru_vars, email, new_user, email_config):
 
     # if new user add to list
     if new_user and email_config.sailthru_new_user_list:
-        sailthru_user['lists'] = {email_config.sailthru_new_user_list: 1}
+        user_list = json.loads(email_config.sailthru_new_user_list)
+        user_list_name = user_list.get(site_domain)
+        if user_list_name:
+            sailthru_user['lists'] = {user_list_name: 1}
+        else:
+            site = Site.objects.get_current()
+            sailthru_user['lists'] = {user_list.get(site.domain): 1}
 
     return sailthru_user
 

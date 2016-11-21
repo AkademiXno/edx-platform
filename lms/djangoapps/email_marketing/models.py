@@ -28,7 +28,7 @@ class EmailMarketingConfiguration(ConfigurationModel):
     )
 
     sailthru_new_user_list = models.fields.CharField(
-        max_length=48,
+        max_length=512,
         help_text=_(
             "Sailthru list name to add new users to. "
         )

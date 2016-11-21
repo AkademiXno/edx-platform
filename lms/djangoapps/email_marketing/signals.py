@@ -150,8 +150,12 @@ def email_marketing_register_user(sender, user=None, profile=None,
     if user.is_anonymous():
         return
 
+    site_domain = _get_site_domain()
+    if not site_domain:
+        return
+
     # perform update asynchronously
-    update_user.delay(_create_sailthru_user_vars(user, user.profile), user.email, new_user=True)
+    update_user.delay(_create_sailthru_user_vars(user, user.profile), user.email, site_domain, new_user=True)
 
 
 @receiver(USER_FIELD_CHANGED)
@@ -187,8 +191,13 @@ def email_marketing_user_field_changed(sender, user=None, table=None, setting=No
         email_config = EmailMarketingConfiguration.current()
         if not email_config.enabled:
             return
+
+        site_domain = _get_site_domain()
+        if not site_domain:
+            return
+
         # perform update asynchronously, flag if activation
-        update_user.delay(_create_sailthru_user_vars(user, user.profile), user.email,
+        update_user.delay(_create_sailthru_user_vars(user, user.profile), user.email, site_domain,
                           new_user=False,
                           activation=(setting == 'is_active') and new_value is True)
 
@@ -218,3 +227,15 @@ def _create_sailthru_user_vars(user, profile):
         sailthru_vars['country'] = unicode(profile.country.code)
 
     return sailthru_vars
+
+
+def _get_site_domain():
+    """
+    Returns the site domain for request if any.
+    """
+    request = crum.get_current_request()
+    if not request:
+        return
+
+    site_domain = request.site.domain
+    return site_domain
