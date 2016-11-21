@@ -65,6 +65,7 @@ class RecalculateSubsectionGradeTest(ModuleStoreTestCase):
             ('course_id', unicode(self.course.id)),
             ('usage_id', unicode(self.problem.location)),
             ('only_if_higher', None),
+            ('raw_earned', 1.0),
             ('raw_possible', 2.0),
             ('score_deleted', False)
         ])

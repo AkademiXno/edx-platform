@@ -331,6 +331,7 @@ def _fire_score_changed_for_block(
         else:
             points_earned, points_possible = weighted_score(0, max_score, getattr(block, 'weight', None))
     else:
+        # if the block no longer exists or does not have a score, no points are possible
         points_earned, points_possible = 0, 0
 
     PROBLEM_SCORE_CHANGED.send(

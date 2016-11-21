@@ -4,17 +4,10 @@ Test grading event across apps.
 # pylint: disable=protected-access
 
 import json
-from bson.tz_util import utc
 
 from capa.tests.response_xml_factory import MultipleChoiceResponseXMLFactory
 from lms.djangoapps.course_blocks.api import get_course_blocks
 from lms.djangoapps.instructor.enrollment import reset_student_attempts
-from lms.djangoapps.instructor_task.tests.test_integration import TestRescoringTask
-from lms.djangoapps.instructor_task.tests.test_base import (
-    InstructorTaskModuleTestCase,
-    OPTION_1,
-    OPTION_2,
-)
 from mock import patch
 from openedx.core.djangolib.testing.utils import get_mock_request
 from xmodule.modulestore.django import modulestore
@@ -25,9 +18,6 @@ from courseware.models import StudentModule
 from courseware.tests.test_submitting_problems import ProblemSubmissionTestMixin
 from student.models import CourseEnrollment
 from student.tests.factories import UserFactory
-from track.request_id_utils import (
-    get_user_action_id
-)
 from ...new.subsection_grade import SubsectionGradeFactory
 
 
@@ -79,10 +69,9 @@ class DeleteStateEventIntegrationTest(ProblemSubmissionTestMixin, SharedModuleSt
         )
         self.instructor = UserFactory.create(is_staff=True, username=u'test_instructor', password=u'test')
 
-    @patch('lms.djangoapps.grades.signals.handlers.tracker')
     @patch('lms.djangoapps.instructor.enrollment.tracker')
     @patch('lms.djangoapps.grades.models.tracker')
-    def test_delete_student_state_events(self, models_tracker, enrollment_tracker, handlers_tracker):
+    def test_delete_student_state_events(self, models_tracker, enrollment_tracker):
         # submit answer
         self.module_to_reset = StudentModule.objects.create(
             student=self.student,
@@ -96,21 +85,11 @@ class DeleteStateEventIntegrationTest(ProblemSubmissionTestMixin, SharedModuleSt
         # check logging to make sure id's are tracked correctly across
         # events
         user_action_id = enrollment_tracker.method_calls[0][1][1]['user_action_id']
-        for call in handlers_tracker.method_calls:
-            self.assertEqual(user_action_id, call[1][1]['user_action_id'])
+
+        # make sure the id is propogated throughout the event flow
         for call in models_tracker.method_calls:
             self.assertEqual(user_action_id, call[1][1]['user_action_id'])
-
-        handlers_tracker.emit.assert_called_with(
-            u'edx.grades.problem.submitted',
-            {
-                'user_id': unicode(self.student.id),
-                'course_id': unicode(self.course.id),
-                'problem_id': unicode(self.problem.location),
-                'user_action_id': user_action_id,
-                'user_action_type': u'edx.grades.problem.state_deleted',
-            }
-        )
+            self.assertEqual(u'edx.grades.problem.state_deleted', call[1][1]['user_action_type'])
 
         course = modulestore().get_course(self.course.id, depth=0)
         models_tracker.emit.assert_called_with(

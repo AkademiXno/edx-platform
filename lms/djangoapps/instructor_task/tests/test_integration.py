@@ -424,10 +424,9 @@ class TestRescoringTask(TestIntegrationTask):
         for user in self.users:
             self.check_state(user, descriptor, 0, 1, expected_attempts=2)
 
-    @patch('lms.djangoapps.grades.signals.handlers.tracker')
     @patch('lms.djangoapps.instructor_task.tasks_helper.tracker')
     @patch('lms.djangoapps.grades.models.tracker')
-    def test_rescoring_events(self, grades_tracker, instructor_task_tracker, handlers_tracker):
+    def test_rescoring_events(self, grades_tracker, instructor_task_tracker):
         problem_edit = dict(correct_answer=OPTION_2)
         self.verify_rescore_for_one_student(
             problem_edit, 0, 2, rescore_if_higher=False,
@@ -446,17 +445,6 @@ class TestRescoringTask(TestIntegrationTask):
                 'new_weighted_possible': 2,
                 'only_if_higher': False,
                 'instructor_id': u'instructor',
-                'user_action_id': user_action_id,
-                'user_action_type': u'edx.grades.problem.rescored',
-            }
-        )
-
-        handlers_tracker.emit.assert_called_with(
-            u'edx.grades.problem.submitted',
-            {
-                'user_id': unicode(self.user1.id),
-                'course_id': unicode(self.course.id),
-                'problem_id': unicode(InstructorTaskModuleTestCase.problem_location('H1P1')),
                 'user_action_id': user_action_id,
                 'user_action_type': u'edx.grades.problem.rescored',
             }

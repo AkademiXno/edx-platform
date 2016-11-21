@@ -68,7 +68,7 @@ def recalculate_subsection_grade(user_id, course_id, usage_id, only_if_higher, r
         usage_id,
         raw_earned,
         raw_possible,
-		score_deleted
+        score_deleted
     )
 
 

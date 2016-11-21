@@ -4,10 +4,11 @@ Grades related signals.
 
 from django.dispatch import receiver
 from logging import getLogger
-from uuid import uuid4
 
 from courseware.model_data import get_score, set_score
 from eventtracking import tracker
+from opaque_keys.edx.keys import CourseKey
+from opaque_keys.edx.locator import BlockUsageLocator
 from openedx.core.lib.grade_utils import is_score_higher
 from student.models import user_by_anonymous_id
 from submissions.models import score_set, score_reset
@@ -131,17 +132,6 @@ def enqueue_subsection_update(sender, **kwargs):  # pylint: disable=unused-argum
     """
     Handles the PROBLEM_SCORE_CHANGED signal by enqueueing a subsection update operation to occur asynchronously.
     """
-    _validate_tracking_info('edx.grades.problem.submitted')
-    tracker.emit(
-        u'edx.grades.problem.submitted',
-        {
-            'user_id': unicode(kwargs['user_id']),
-            'course_id': unicode(kwargs['course_id']),
-            'problem_id': unicode(kwargs['usage_id']),
-            'user_action_id': unicode(get_user_action_id()),
-            'user_action_type': unicode(get_user_action_type()),
-        }
-    )
     result = recalculate_subsection_grade.apply_async(
         kwargs=dict(
             user_id=kwargs['user_id'],
@@ -153,7 +143,6 @@ def enqueue_subsection_update(sender, **kwargs):  # pylint: disable=unused-argum
             score_deleted=kwargs.get('score_deleted', False),
         )
     )
-    
     log.info(
         u'Grades: Request async calculation of subsection grades with args: {}. Task [{}]'.format(
             ', '.join('{}:{}'.format(arg, kwargs[arg]) for arg in sorted(kwargs)),
