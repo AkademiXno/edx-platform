@@ -308,12 +308,14 @@ class SubsectionGradingPolicyTest(ProgressPageBaseTest):
 
     def test_axis_a11y(self):
         """
-        Tests that the progress chart axis have appropriate a11y (screenreader) markup.
+        Tests that the progress chart axes have appropriate a11y (screenreader) markup.
         """
         with self._logged_in_session():
             self.courseware_page.visit()
+            # Answer the first HW problem (the unit contains 2 problems, only one will be answered correctly)
             self._answer_problem_correctly()
             self.courseware_page.click_next_button_on_top()
+            # Answer the first Lab problem (unit only contains a single problem)
             self._answer_problem_correctly()
             self.progress_page.visit()
 

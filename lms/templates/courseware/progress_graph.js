@@ -57,17 +57,24 @@ $(function () {
                                               'color' : colors[colorIndex]}
       
       categoryData = categories[ section['category'] ]
-    
+
+      ## Because this is Python (Mako) embedded in JavaScript, our safe linting script is
+      ## thoroughly confused. We should rewrite this file to remove Python/Mako.
+      ## safe-lint: disable=javascript-jquery-append
       categoryData['data'].append( [tickIndex, section['percent']] )
+      ## safe-lint: disable=javascript-jquery-append
       ticks.append( [tickIndex, section['label'] ] )
     
       if section['category'] in detail_tooltips:
+          ## safe-lint: disable=javascript-jquery-append
           detail_tooltips[ section['category'] ].append( section['detail'] )
       else:
           detail_tooltips[ section['category'] ] = [ section['detail'], ]
           
       if 'mark' in section:
+          ## safe-lint: disable=javascript-jquery-append
           droppedScores.append( [tickIndex, 0.05] )
+          ## safe-lint: disable=javascript-jquery-append
           dropped_score_tooltips.append( section['mark']['detail'] )
         
       tickIndex += 1
@@ -75,7 +82,7 @@ $(function () {
       if section.get('prominent', False):
           tickIndex += sectionSpacer
           
-  ## ----------------------------- Grade overviewew bar ------------------------- ##
+  ## ----------------------------- Grade overview bar ------------------------- ##
   tickIndex += sectionSpacer
   
   series = categories.values()
@@ -90,7 +97,7 @@ $(function () {
             else:
                 color = colors[ extraColorIndex % len(colors) ]
                 extraColorIndex += 1
-        
+            ## safe-lint: disable=javascript-jquery-append
             series.append({
                 'label' : section['category'] + "-grade_breakdown",
                 'data' : [ [overviewBarX, section['percent']] ],
@@ -114,6 +121,7 @@ $(function () {
     descending_grades = sorted(grade_cutoffs, key=lambda x: grade_cutoffs[x], reverse=True)
     for grade in descending_grades:
         percent = grade_cutoffs[grade]
+        ## safe-lint: disable=javascript-jquery-append
         grade_cutoff_ticks.append( [ percent, u"{0} {1:.0%}".format(grade, percent) ] )
   else:
     grade_cutoff_ticks = [ ]
@@ -265,6 +273,7 @@ $(function () {
       edx.HtmlUtils.append(
           $grade_detail_graph,
           edx.HtmlUtils.joinHtml(
+              // safe-lint: disable=javascript-concat-html
               edx.HtmlUtils.HTML('<div class="overallGrade" style="position:absolute;left:' + (o.left - 12) + 'px;top:' + (o.top - 20) + 'px">'),
               edx.HtmlUtils.HTML('<span class=sr>'),
               gettext('Overall Score'),
