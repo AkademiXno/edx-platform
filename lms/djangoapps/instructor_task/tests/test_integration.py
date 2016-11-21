@@ -9,7 +9,6 @@ import json
 import logging
 import textwrap
 from collections import namedtuple
-from uuid import uuid4
 
 import ddt
 from bson.tz_util import utc
@@ -198,7 +197,7 @@ class TestRescoringTask(TestIntegrationTask):
         for i, user in enumerate(self.users):
             self.check_state(user, descriptor, new_expected_scores[i], new_expected_max)
 
-    def verify_rescore_for_one_student(self, problem_edit, new_expected_scores, new_expected_max, rescore_if_higher):
+    def verify_rescore_for_one_student(self, problem_edit, new_expected_score, new_expected_max, rescore_if_higher):
         """
         Common helper to verify the results of rescoring for a single
         student and all students are as expected.
@@ -213,7 +212,6 @@ class TestRescoringTask(TestIntegrationTask):
         self.submit_student_answer('u1', problem_url_name, [OPTION_1, OPTION_1])
 
         # verify each user's grade
-        expected_original_scores = (2, 1, 1, 0)
         expected_original_max = 2
         self.check_state(self.user1, descriptor, 2, expected_original_max)
 
@@ -222,11 +220,11 @@ class TestRescoringTask(TestIntegrationTask):
 
         # confirm that simply rendering the problem again does not change the grade
         self.render_problem('u1', problem_url_name)
-        self.check_state(self.user1, descriptor, expected_original_scores[0], expected_original_max)
+        self.check_state(self.user1, descriptor, 2, expected_original_max)
 
         # rescore the problem for only one student -- only that student's grade should change:
         self.submit_rescore_one_student_answer('instructor', problem_url_name, self.user1, rescore_if_higher)
-        self.check_state(self.user1, descriptor, new_expected_scores[0], new_expected_max)
+        self.check_state(self.user1, descriptor, new_expected_score, new_expected_max)
 
     RescoreTestData = namedtuple('RescoreTestData', 'edit, new_expected_scores, new_expected_max')
 
@@ -426,17 +424,15 @@ class TestRescoringTask(TestIntegrationTask):
         for user in self.users:
             self.check_state(user, descriptor, 0, 1, expected_attempts=2)
 
-    @patch('xmodule.capa_base.uuid4')
+    @patch('lms.djangoapps.grades.signals.handlers.tracker')
     @patch('lms.djangoapps.instructor_task.tasks_helper.tracker')
     @patch('lms.djangoapps.grades.models.tracker')
-    def test_rescoring_events(self, grades_tracker, instructor_task_tracker, capa_uuid):
+    def test_rescoring_events(self, grades_tracker, instructor_task_tracker, handlers_tracker):
         problem_edit = dict(correct_answer=OPTION_2)
-        new_expected_scores = (0, 1, 1, 2)
-        new_expected_max = 2
-        capa_uuid.return_value = uuid4()
         self.verify_rescore_for_one_student(
-            problem_edit, new_expected_scores, new_expected_max, rescore_if_higher=False,
+            problem_edit, 0, 2, rescore_if_higher=False,
         )
+        user_action_id = instructor_task_tracker.method_calls[0][1][1]['user_action_id']
 
         instructor_task_tracker.emit.assert_called_with(
             u'edx.grades.problem.rescored',
@@ -450,8 +446,19 @@ class TestRescoringTask(TestIntegrationTask):
                 'new_weighted_possible': 2,
                 'only_if_higher': False,
                 'instructor_id': u'instructor',
-                'grade_update_root_id': unicode(capa_uuid.return_value),
-                'grade_update_root_type': u'edx.grades.problem.rescored',
+                'user_action_id': user_action_id,
+                'user_action_type': u'edx.grades.problem.rescored',
+            }
+        )
+
+        handlers_tracker.emit.assert_called_with(
+            u'edx.grades.problem.submitted',
+            {
+                'user_id': unicode(self.user1.id),
+                'course_id': unicode(self.course.id),
+                'problem_id': unicode(InstructorTaskModuleTestCase.problem_location('H1P1')),
+                'user_action_id': user_action_id,
+                'user_action_type': u'edx.grades.problem.rescored',
             }
         )
 
@@ -466,8 +473,8 @@ class TestRescoringTask(TestIntegrationTask):
                 'grading_policy_hash': u'ChVp0lHGQGCevD0t4njna/C44zQ=',
                 'user_id': unicode(self.user1.id),
                 'letter_grade': u'',
-                'grade_update_root_id': unicode(capa_uuid.return_value),
-                'grade_update_root_type': u'edx.grades.problem.rescored',
+                'user_action_id': user_action_id,
+                'user_action_type': u'edx.grades.problem.rescored',
                 'course_id': unicode(self.course.id),
                 'course_edited_timestamp': unicode(course.subtree_edited_on.replace(tzinfo=utc)),
             }

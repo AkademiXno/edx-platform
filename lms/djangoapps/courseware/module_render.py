@@ -473,8 +473,6 @@ def get_module_system_for_user(user, student_data,  # TODO  # pylint: disable=to
                 raw_earned=event['value'],
                 raw_possible=event['max_value'],
                 only_if_higher=event.get('only_if_higher'),
-                grade_update_root_id=event.get('grade_update_root_id'),
-                grade_update_root_type=event.get('grade_update_root_type'),
             )
         else:
             aside_context = {}

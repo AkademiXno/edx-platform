@@ -6,27 +6,31 @@ Does not include any access control, be sure to check access before calling.
 
 import json
 import logging
-from django.contrib.auth.models import User
-from django.conf import settings
-from django.core.urlresolvers import reverse
-from django.core.mail import send_mail
-from django.utils.translation import override as override_language
-from uuid import uuid4
 
-from course_modes.models import CourseMode
-from courseware.models import StudentModule
+from django.conf import settings
+from django.contrib.auth.models import User
+from django.core.mail import send_mail
+from django.core.urlresolvers import reverse
+from django.utils.translation import override as override_language
 from eventtracking import tracker
-from edxmako.shortcuts import render_to_string
 from lms.djangoapps.grades.scores import weighted_score
 from lms.djangoapps.grades.signals.signals import PROBLEM_SCORE_CHANGED
 from openedx.core.djangoapps.lang_pref import LANGUAGE_KEY
 from openedx.core.djangoapps.site_configuration import helpers as configuration_helpers
 from openedx.core.djangoapps.user_api.models import UserPreference
 from submissions import api as sub_api  # installed from the edx-submissions repository
-from student.models import CourseEnrollment, CourseEnrollmentAllowed, anonymous_id_for_user
 from xmodule.modulestore.django import modulestore
 from xmodule.modulestore.exceptions import ItemNotFoundError
 
+from course_modes.models import CourseMode
+from courseware.models import StudentModule
+from edxmako.shortcuts import render_to_string
+from student.models import CourseEnrollment, CourseEnrollmentAllowed, anonymous_id_for_user
+from track.request_id_utils import (
+    create_new_user_action_id,
+    set_user_action_type,
+    get_user_action_id
+)
 
 log = logging.getLogger(__name__)
 
@@ -269,17 +273,18 @@ def reset_student_attempts(course_id, student, module_state_key, requesting_user
 
     if delete_module:
         module_to_reset.delete()
-        grade_update_root_id = uuid4()
-        grade_update_root_type = u'edx.grades.problem.state_deleted'
+        create_new_user_action_id()
+        grade_update_root_type = 'edx.grades.problem.state_deleted'
+        set_user_action_type(grade_update_root_type)
         tracker.emit(
-            grade_update_root_type,
+            unicode(grade_update_root_type),
             {
                 'user_id': unicode(student.id),
                 'course_id': unicode(course_id),
                 'problem_id': unicode(module_state_key),
                 'instructor_id': unicode(requesting_user.username),
-                'grade_update_root_id': unicode(grade_update_root_id),
-                'grade_update_root_type': grade_update_root_type,
+                'user_action_id': unicode(get_user_action_id()),
+                'user_action_type': unicode(grade_update_root_type),
             }
         )
         _fire_score_changed_for_block(
@@ -287,8 +292,6 @@ def reset_student_attempts(course_id, student, module_state_key, requesting_user
             student,
             block,
             module_state_key,
-            grade_update_root_id,
-            grade_update_root_type
         )
     else:
         _reset_module_attempts(module_to_reset)
@@ -315,8 +318,6 @@ def _fire_score_changed_for_block(
         student,
         block,
         module_state_key,
-        grade_update_root_id,
-        grade_update_root_type
 ):
     """
     Fires a PROBLEM_SCORE_CHANGED event for the given module. The earned points are
@@ -339,8 +340,6 @@ def _fire_score_changed_for_block(
         user_id=student.id,
         course_id=unicode(course_id),
         usage_id=unicode(module_state_key),
-        grade_update_root_id=grade_update_root_id,
-        grade_update_root_type=grade_update_root_type,
         score_deleted=True,
     )
 

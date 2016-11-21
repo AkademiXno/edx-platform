@@ -103,25 +103,21 @@ class SubsectionGrade(object):
             course_key,
         )
 
-    def create_model(self, student, grade_update_root_id=None, grade_update_root_type=None):
+    def create_model(self, student):
         """
         Saves the subsection grade in a persisted model.
         """
         self._log_event(log.debug, u"create_model", student)
         return PersistentSubsectionGrade.create_grade(
-            grade_update_root_id,
-            grade_update_root_type,
             **self._persisted_model_params(student)
         )
 
-    def update_or_create_model(self, student, grade_update_root_id=None, grade_update_root_type=None):
+    def update_or_create_model(self, student):
         """
         Saves or updates the subsection grade in a persisted model.
         """
         self._log_event(log.debug, u"update_or_create_model", student)
         return PersistentSubsectionGrade.update_or_create_grade(
-            grade_update_root_id,
-            grade_update_root_type,
             **self._persisted_model_params(student)
         )
 
@@ -241,7 +237,7 @@ class SubsectionGradeFactory(object):
         SubsectionGrade.bulk_create_models(self.student, self._unsaved_subsection_grades, self.course.id)
         self._unsaved_subsection_grades = []
 
-    def update(self, subsection, only_if_higher=None, grade_update_root_id=None, grade_update_root_type=None):
+    def update(self, subsection, only_if_higher=None):
         """
         Updates the SubsectionGrade object for the student and subsection.
         """
@@ -273,11 +269,7 @@ class SubsectionGradeFactory(object):
                 ):
                     return orig_subsection_grade
 
-        grade_model = calculated_grade.update_or_create_model(
-            self.student,
-            grade_update_root_id=grade_update_root_id,
-            grade_update_root_type=grade_update_root_type
-        )
+        grade_model = calculated_grade.update_or_create_model(self.student)
         self._update_saved_subsection_grade(subsection.location, grade_model)
         return calculated_grade
 

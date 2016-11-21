@@ -14,6 +14,7 @@ from django.test import TestCase
 from django.utils.timezone import now
 from freezegun import freeze_time
 from opaque_keys.edx.locator import CourseLocator, BlockUsageLocator
+from track.request_id_utils import get_user_action_id, get_user_action_type
 
 from lms.djangoapps.grades.models import (
     BlockRecord,
@@ -212,8 +213,6 @@ class PersistentSubsectionGradeTest(GradesModelTestCase):
             "possible_graded": 8.0,
             "visible_blocks": self.block_records,
             "first_attempted": "2016-08-01 18:53:24.354741",
-            "grade_update_root_id": "some id",
-            "grade_update_root_type": "some type",
         }
 
     def test_create(self):
@@ -295,8 +294,8 @@ class PersistentSubsectionGradeTest(GradesModelTestCase):
                 'weighted_graded_possible': grade.possible_graded,
                 'first_attempted': unicode(grade.first_attempted),
                 'subtree_edited_timestamp': unicode(grade.subtree_edited_timestamp),
-                'grade_update_root_id': unicode(self.params['grade_update_root_id']),
-                'grade_update_root_type': unicode(self.params['grade_update_root_type']),
+                'user_action_id': unicode(get_user_action_id()),
+                'user_action_type': unicode(get_user_action_type()),
                 'visible_blocks_hash': unicode(grade.visible_blocks_id),
             }
         )
@@ -325,8 +324,6 @@ class PersistentCourseGradesTest(GradesModelTestCase):
             "percent_grade": 77.7,
             "letter_grade": "Great job",
             "passed": True,
-            "grade_update_root_id": "some id",
-            "grade_update_root_type": "some type"
         }
 
     def test_update(self):
@@ -389,8 +386,8 @@ class PersistentCourseGradesTest(GradesModelTestCase):
         created_grade = PersistentCourseGrade.update_or_create_course_grade(**self.params)
         read_grade = PersistentCourseGrade.read_course_grade(self.params["user_id"], self.params["course_id"])
         for param in self.params:
-            if param in {u'passed', u'grade_update_root_type', u'grade_update_root_id'}:
-                continue  # these params require special handling, and are tested separately
+            if param == u'passed':
+                continue  # passed requires special handling, and is tested separately
             self.assertEqual(self.params[param], getattr(created_grade, param))
         self.assertIsInstance(created_grade.passed_timestamp, datetime)
         self.assertEqual(created_grade, read_grade)
@@ -433,8 +430,8 @@ class PersistentCourseGradesTest(GradesModelTestCase):
                 'percent_grade': grade.percent_grade,
                 'letter_grade': unicode(grade.letter_grade),
                 'course_edited_timestamp': unicode(grade.course_edited_timestamp),
-                'grade_update_root_id': unicode(self.params['grade_update_root_id']),
-                'grade_update_root_type': unicode(self.params['grade_update_root_type']),
+                'user_action_id': unicode(get_user_action_id()),
+                'user_action_type': unicode(get_user_action_type()),
                 'grading_policy_hash': unicode(grade.grading_policy_hash),
             }
         )

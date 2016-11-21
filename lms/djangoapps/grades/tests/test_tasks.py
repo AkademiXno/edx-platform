@@ -43,6 +43,7 @@ class RecalculateSubsectionGradeTest(ModuleStoreTestCase):
             name='course',
             run='run',
         )
+
         if not enable_subsection_grades:
             PersistentGradesEnabledFlag.objects.create(enabled=False)
 
@@ -57,8 +58,6 @@ class RecalculateSubsectionGradeTest(ModuleStoreTestCase):
             ('course_id', unicode(self.course.id)),
             ('usage_id', unicode(self.problem.location)),
             ('only_if_higher', None),
-            ('grade_update_root_id', 'id'),
-            ('grade_update_root_type', 'type'),
         ])
 
         self.recalculate_subsection_grade_kwargs = OrderedDict([
@@ -66,12 +65,8 @@ class RecalculateSubsectionGradeTest(ModuleStoreTestCase):
             ('course_id', unicode(self.course.id)),
             ('usage_id', unicode(self.problem.location)),
             ('only_if_higher', None),
-            ('grade_update_r            ('grade_update_root_id', 'id'),
-    
             ('raw_possible', 2.0),
-            ('score_deleted', False),0),
-            ('raw_possible', 2.0),
-            ('score_deleted', False),
+            ('score_deleted', False)
         ])
 
         # this call caches the anonymous id on the user object, saving 4 queries in all happy path tests

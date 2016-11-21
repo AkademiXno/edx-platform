@@ -33,6 +33,12 @@ from shoppingcart.models import (
 from survey.models import SurveyAnswer
 
 from track.views import task_track
+from track.request_id_utils import (
+    get_user_action_type,
+    get_user_action_id,
+    set_user_action_type,
+    create_new_user_action_id
+)
 from util.db import outer_atomic
 from util.file import course_filename_prefix_generator, UniversalNewlineIterator
 from xblock.runtime import KvsFieldData
@@ -518,6 +524,10 @@ def rescore_problem_module_state(xmodule_instance_args, module_descriptor, stude
             msg = "Specified problem does not support rescoring."
             raise UpdateProblemModuleStateError(msg)
 
+        # set the tracking info before this call, because
+        # it makes downstream calls that create events
+        action_id = create_new_user_action_id()
+        set_user_action_type('edx.grades.problem.rescored')
         result = instance.rescore_problem(only_if_higher=task_input['only_if_higher'])
         instance.save()
 
@@ -559,7 +569,7 @@ def rescore_problem_module_state(xmodule_instance_args, module_descriptor, stude
             )
 
             tracker.emit(
-                unicode(result['grade_update_root_type']),
+                u'edx.grades.problem.rescored',
                 {
                     'course_id': unicode(course_id),
                     'user_id': unicode(student.id),
@@ -570,8 +580,8 @@ def rescore_problem_module_state(xmodule_instance_args, module_descriptor, stude
                     'new_weighted_possible': result['new_weighted_possible'],
                     'only_if_higher': task_input['only_if_higher'],
                     'instructor_id': unicode(xmodule_instance_args['request_info']['username']),
-                    'grade_update_root_id': unicode(result['grade_update_root_id']),
-                    'grade_update_root_type': unicode(result['grade_update_root_type']),
+                    'user_action_id': unicode(action_id),
+                    'user_action_type': unicode(u'edx.grades.problem.rescored'),
                 }
             )
 

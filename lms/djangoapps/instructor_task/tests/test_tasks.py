@@ -272,8 +272,6 @@ class TestRescoreInstructorTask(TestInstructorTasks):
                 'new_weighted_earned': 1,
                 'original_weighted_possible': 1,
                 'new_weighted_possible': 1,
-                'grade_update_root_id': 'x',
-                'grade_update_root_type': 'y',
             }
         )
         with patch('lms.djangoapps.instructor_task.tasks_helper.get_module_for_descriptor_internal') as mock_get_module:

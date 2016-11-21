@@ -534,6 +534,7 @@ class TestStudentModuleGrading(SharedModuleStoreTestCase):
         )
         cls.request = get_mock_request(UserFactory())
         cls.user = cls.request.user
+        cls.instructor = UserFactory(username='staff', is_staff=True)
 
     def _get_subsection_grade_and_verify(self, all_earned, all_possible, graded_earned, graded_possible):
         """
@@ -552,22 +553,37 @@ class TestStudentModuleGrading(SharedModuleStoreTestCase):
         self.assertEqual(grade.graded_total.possible, graded_possible)
 
     @patch('crum.get_current_request')
-    def test_delete_student_state(self, _crum_mock):
+    @patch('lms.djangoapps.instructor.enrollment.tracker')
+    @patch('track.request_id_utils.uuid4')
+    def test_delete_student_state(self, mock_uuid, tracker_mock, _crum_mock):
         problem_location = self.problem.location
         self._get_subsection_grade_and_verify(0, 1, 0, 1)
         answer_problem(course=self.course, request=self.request, problem=self.problem, score=1, max_value=1)
         self._get_subsection_grade_and_verify(1, 1, 1, 1)
-
+        mock_uuid.return_value = 'fake uuid'
         # Delete student state using the instructor dash
         reset_student_attempts(
             self.course.id,
             self.user,
             problem_location,
-            requesting_user=self.user,
+            requesting_user=self.instructor,
             delete_module=True,
         )
         # Verify that the student's grades are reset
         self._get_subsection_grade_and_verify(0, 1, 0, 1)
+
+        # Verify that the correct grading event is emitted
+        tracker_mock.emit.assert_called_with(
+            u'edx.grades.problem.state_deleted',
+            {
+                'user_id': unicode(self.user.id),
+                'course_id': unicode(self.course.id),
+                'problem_id': unicode(self.problem.location),
+                'instructor_id': unicode(self.instructor.username),
+                'user_action_id': u'fake uuid',
+                'user_action_type': u'edx.grades.problem.state_deleted',
+            }
+        )
 
 
 class EnrollmentObjects(object):

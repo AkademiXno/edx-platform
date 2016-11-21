@@ -11,6 +11,12 @@ from eventtracking import tracker
 from openedx.core.lib.grade_utils import is_score_higher
 from student.models import user_by_anonymous_id
 from submissions.models import score_set, score_reset
+from track.request_id_utils import (
+    get_user_action_type,
+    get_user_action_id,
+    set_user_action_type,
+    create_new_user_action_id
+)
 
 from .signals import PROBLEM_SCORE_CHANGED, SUBSECTION_SCORE_CHANGED, SCORE_PUBLISHED
 from ..new.course_grade import CourseGradeFactory
@@ -115,9 +121,7 @@ def score_published_handler(sender, block, user, raw_earned, raw_possible, only_
             user_id=user.id,
             course_id=unicode(block.location.course_key),
             usage_id=unicode(block.location),
-            only_if_higher=only_if_higher,
-            grade_update_root_id=kwargs.get('grade_update_root_id'),
-            grade_update_root_type=kwargs.get('grade_update_root_type'),
+            only_if_higher=only_if_higher
         )
     return update_score
 
@@ -127,17 +131,15 @@ def enqueue_subsection_update(sender, **kwargs):  # pylint: disable=unused-argum
     """
     Handles the PROBLEM_SCORE_CHANGED signal by enqueueing a subsection update operation to occur asynchronously.
     """
-    grade_update_root_id, grade_update_root_type = _get_unicode_tracking_params_from_kwargs(
-        kwargs,
-        'edx.grades.problem.submitted'
-	tracker.emit(
+    _validate_tracking_info('edx.grades.problem.submitted')
+    tracker.emit(
         u'edx.grades.problem.submitted',
         {
             'user_id': unicode(kwargs['user_id']),
             'course_id': unicode(kwargs['course_id']),
             'problem_id': unicode(kwargs['usage_id']),
-            'grade_update_root_id': grade_update_root_id,
-            'grade_update_root_type': grade_update_root_type,
+            'user_action_id': unicode(get_user_action_id()),
+            'user_action_type': unicode(get_user_action_type()),
         }
     )
     result = recalculate_subsection_grade.apply_async(
@@ -149,8 +151,6 @@ def enqueue_subsection_update(sender, **kwargs):  # pylint: disable=unused-argum
             raw_earned=kwargs.get('points_earned'),
             raw_possible=kwargs.get('points_possible'),
             score_deleted=kwargs.get('score_deleted', False),
-			grade_update_root_id=grade_update_root_id,
-            grade_update_root_type=grade_update_root_type,
         )
     )
     
@@ -167,22 +167,13 @@ def recalculate_course_grade(sender, course, course_structure, user, **kwargs): 
     """
     Updates a saved course grade.
     """
-    grade_update_root_id, grade_update_root_type = _get_unicode_tracking_params_from_kwargs(
-        kwargs,
-        'edx.grades.subsection.grade_calculated'
-    )
-    CourseGradeFactory(user).update(course, course_structure, grade_update_root_id, grade_update_root_type)
+    CourseGradeFactory(user).update(course, course_structure)
 
 
-def _get_unicode_tracking_params_from_kwargs(kwargs, default_root_type):
-    if 'grade_update_root_id' in kwargs and kwargs['grade_update_root_id']:
-        grade_update_root_id = kwargs['grade_update_root_id']
-    else:
-        grade_update_root_id = uuid4()
-
-    if 'grade_update_root_type' in kwargs and kwargs['grade_update_root_type']:
-        grade_update_root_type = kwargs['grade_update_root_type']
-    else:
-        grade_update_root_type = default_root_type
-
-    return unicode(grade_update_root_id), unicode(grade_update_root_type)
+def _validate_tracking_info(default_root_type):
+    root_id = get_user_action_id()
+    root_type = get_user_action_type()
+    if not root_id:
+        create_new_user_action_id()
+    if not root_type:
+        set_user_action_type(default_root_type)

@@ -142,7 +142,7 @@ class CourseGrade(object):
 
         return grade_summary
 
-    def compute_and_update(self, grade_update_root_id=None, grade_update_root_type=None, read_only=False):
+    def compute_and_update(self, read_only=False):
         """
         Computes the grade for the given student and course.
 
@@ -166,8 +166,6 @@ class CourseGrade(object):
                 percent_grade=self.percent,
                 letter_grade=self.letter_grade or "",
                 passed=self.passed,
-                grade_update_root_id=grade_update_root_id,
-                grade_update_root_type=grade_update_root_type,
             )
 
         self._signal_listeners_when_grade_computed()
@@ -345,11 +343,11 @@ class CourseGradeFactory(object):
             self._compute_and_update_grade(course, course_structure, read_only=read_only)
         )
 
-    def update(self, course, course_structure, grade_update_root_id=None, grade_update_root_type=None):
+    def update(self, course, course_structure):
         """
         Updates the CourseGrade for this Factory's student.
         """
-        self._compute_and_update_grade(course, course_structure, grade_update_root_id, grade_update_root_type)
+        self._compute_and_update_grade(course, course_structure)
 
     def get_persisted(self, course):
         """
@@ -374,14 +372,14 @@ class CourseGradeFactory(object):
             course_structure
         )
 
-    def _compute_and_update_grade(self, course, course_structure, grade_update_root_id=None, grade_update_root_type=None, read_only=False):
+    def _compute_and_update_grade(self, course, course_structure, read_only=False):
         """
         Freshly computes and updates the grade for the student and course.
 
         If read_only is True, doesn't save any updates to the grades.
         """
         course_grade = CourseGrade(self.student, course, course_structure)
-        course_grade.compute_and_update(grade_update_root_id, grade_update_root_type, read_only)
+        course_grade.compute_and_update(read_only)
         return course_grade
 
     def _user_has_access_to_course(self, course_structure):

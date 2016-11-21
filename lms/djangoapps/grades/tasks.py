@@ -23,9 +23,7 @@ log = getLogger(__name__)
 
 
 @task(default_retry_delay=30, routing_key=settings.RECALCULATE_GRADES_ROUTING_KEY)
-def recalculate_subsection_grade(
-	user_id, course_id, usage_id, only_if_higher, raw_earned, raw_possible, grade_update_root_id, grade_update_root_type, **kwargs
-):
+def recalculate_subsection_grade(user_id, course_id, usage_id, only_if_higher, raw_earned, raw_possible, **kwargs):
     """
     Updates a saved subsection grade.
 
@@ -70,8 +68,6 @@ def recalculate_subsection_grade(
         usage_id,
         raw_earned,
         raw_possible,
-        grade_update_root_id,
-        grade_update_root_type,
 		score_deleted
     )
 
@@ -106,8 +102,6 @@ def _update_subsection_grades(
         usage_id,
         raw_earned,
         raw_possible,
-        grade_update_root_id,
-        grade_update_root_type,
         score_deleted,
 ):
     """
@@ -133,8 +127,6 @@ def _update_subsection_grades(
                 subsection_grade = subsection_grade_factory.update(
                     course_structure[subsection_usage_key],
                     only_if_higher,
-                	grade_update_root_id,
-                	grade_update_root_type,
                 )
                 SUBSECTION_SCORE_CHANGED.send(
                     sender=recalculate_subsection_grade,
@@ -142,8 +134,6 @@ def _update_subsection_grades(
                     course_structure=course_structure,
                     user=student,
                     subsection_grade=subsection_grade,
-					grade_update_root_id=grade_update_root_id,
-                	grade_update_root_type=grade_update_root_type,
                 )
 
     except DatabaseError as exc:
