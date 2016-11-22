@@ -1,7 +1,11 @@
 <%page args="grade_summary, grade_cutoffs, graph_div_id, show_grade_breakdown = True, show_grade_cutoffs = True, **kwargs"/>
 <%!
-import json
-import math
+    import json
+    import math
+    import bleach
+    from openedx.core.djangolib.js_utils import (
+        dump_js_escaped_json, js_escaped_string
+    )
 %>
 
 $(function () {
@@ -62,8 +66,12 @@ $(function () {
       ## thoroughly confused. We should rewrite this file to remove Python/Mako.
       ## safe-lint: disable=javascript-jquery-append
       categoryData['data'].append( [tickIndex, section['percent']] )
+
+      ## Note that some courses had stored images in the Abbreviation. We are no longer
+      ## allowing the display of such images, and remove any previously stored HTML
+      ## to prevent ugly HTML from being shown to learners.
       ## safe-lint: disable=javascript-jquery-append
-      ticks.append( [tickIndex, section['label'] ] )
+      ticks.append( [tickIndex, bleach.clean(section['label'], tags=[], strip=True)] )
     
       if section['category'] in detail_tooltips:
           ## safe-lint: disable=javascript-jquery-append
@@ -127,12 +135,12 @@ $(function () {
     grade_cutoff_ticks = [ ]
   %>
   
-  var series = ${ json.dumps( series ) };
-  var ticks = ${ json.dumps(ticks) };
-  var bottomTicks = ${ json.dumps(bottomTicks) };
-  var detail_tooltips = ${ json.dumps(detail_tooltips) };
-  var droppedScores = ${ json.dumps(droppedScores) };
-  var grade_cutoff_ticks = ${ json.dumps(grade_cutoff_ticks) }
+  var series = ${ series | n, dump_js_escaped_json };
+  var ticks = ${ ticks | n, dump_js_escaped_json };
+  var bottomTicks = ${ bottomTicks | n, dump_js_escaped_json };
+  var detail_tooltips = ${ detail_tooltips | n, dump_js_escaped_json };
+  var droppedScores = ${ droppedScores | n, dump_js_escaped_json };
+  var grade_cutoff_ticks = ${ grade_cutoff_ticks | n, dump_js_escaped_json }
   
   var yAxisTooltips={};
 
@@ -219,7 +227,7 @@ $(function () {
     xaxis: {
         tickLength: 0,
         min: 0.0,
-        max: ${tickIndex - sectionSpacer},
+        max: ${tickIndex - sectionSpacer | n, dump_js_escaped_json},
         ticks: function() {
             for (var i = 0; i < ticks.length; i++) {
                 var tickLabel = edx.HtmlUtils.joinHtml(
@@ -263,12 +271,14 @@ $(function () {
     }
   };
   
-  var $grade_detail_graph = $("#${graph_div_id}");
+  var $grade_detail_graph = $("#${graph_div_id | n, js_escaped_string}");
   if ($grade_detail_graph.length > 0) {
     var plot = $.plot($grade_detail_graph, series, options);
     
     %if show_grade_breakdown:
-      var o = plot.pointOffset({x: ${overviewBarX} , y: ${totalScore}});
+      var o = plot.pointOffset(
+          {x: ${overviewBarX | n, dump_js_escaped_json} , y: ${totalScore | n, dump_js_escaped_json}}
+      );
 
       edx.HtmlUtils.append(
           $grade_detail_graph,
@@ -278,7 +288,7 @@ $(function () {
               edx.HtmlUtils.HTML('<span class=sr>'),
               gettext('Overall Score'),
               edx.HtmlUtils.HTML('</span>'),
-              '${'{totalscore:.0%}'.format(totalscore=totalScore)}',
+              '${'{totalscore:.0%}'.format(totalscore=totalScore) | n, js_escaped_string}',
               edx.HtmlUtils.HTML('</div>')
           )
       );
