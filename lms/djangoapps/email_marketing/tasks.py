@@ -175,14 +175,12 @@ def create_sailthru_user_list(self, user_lists):
         raise self.retry(exc=exc, countdown=email_config.sailthru_retry_interval,
                          max_retries=email_config.sailthru_max_retries)
 
-    import pudb; pu.db
     for key, value in user_lists.items():
         list_exist = False
         for user_list in sailthru_get_response.json['lists']:
             if user_list.get('name') == value:
                 list_exist = True
 
-        import pudb; pu.db
         if not list_exist:
             list_params = {'list': value, 'primary': 0, 'public_name': value}
             sailthru_client = SailthruClient(email_config.sailthru_key, email_config.sailthru_secret)
