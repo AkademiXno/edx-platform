@@ -40,10 +40,13 @@ def remove_sailthru_user_list(apps, schema_editor):
 
 def get_user_list_json():
     sites = Site.objects.all()
-    sailthru_user_lists = {sites[0].domain: 'All edX Users'}
-    for site in sites[1:]:
-        domain_name = site.domain.split('.')[0]
-        sailthru_user_lists[site.domain] = domain_name + '_user_list'
+    sailthru_user_lists = dict()
+    for site in sites:
+        if 'edx' in site.domain:
+            sailthru_user_lists[site.domain] = 'All edX Users'
+        else:
+            domain_name = site.domain.split('.')[0]
+            sailthru_user_lists[site.domain] = domain_name + '_user_list'
 
     return json.dumps(sailthru_user_lists)
 
