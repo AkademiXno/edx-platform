@@ -4,14 +4,13 @@ End-to-end tests for the LMS that utilize the
 progress page.
 """
 from contextlib import contextmanager
-
 import ddt
+from nose.plugins.attrib import attr
 
 from ..helpers import (
     UniqueCourseTest, auto_auth, create_multiple_choice_problem, create_multiple_choice_xml, get_modal_alert
 )
 from ...fixtures.course import CourseFixture, XBlockFixtureDesc
-from nose.plugins.attrib import attr
 from ...pages.common.logout import LogoutPage
 from ...pages.lms.courseware import CoursewarePage
 from ...pages.lms.instructor_dashboard import InstructorDashboardPage, StudentSpecificAdmin

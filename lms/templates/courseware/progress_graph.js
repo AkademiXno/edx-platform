@@ -13,16 +13,16 @@ $(function () {
   function showTooltip(x, y, contents) {
       $("#tooltip").remove();
       var $tooltip_div = $('<div id="tooltip"></div>').css({
-              position: 'absolute',
-              display: 'none',
-              top: y + 5,
-              left: x + 15,
-              border: '1px solid #000',
-              padding: '4px 6px',
-              color: '#fff',
-              'background-color': '#222',
-              opacity: 0.90
-          });
+          position: 'absolute',
+          display: 'none',
+          top: y + 5,
+          left: x + 15,
+          border: '1px solid #000',
+          padding: '4px 6px',
+          color: '#fff',
+          'background-color': '#222',
+          opacity: 0.90
+      });
 
       edx.HtmlUtils.setHtml(
           $tooltip_div,
@@ -177,13 +177,12 @@ $(function () {
           // push the new tooltip on the existing list.
           if (tickIndex in yAxisTooltips) {
               yAxisTooltips[tickIndex].push(detail_tooltips[series[seriesIndex]['label']][dataIndex]);
-          }
-          else {
+          } else {
               yAxisTooltips[tickIndex] = [detail_tooltips[series[seriesIndex]['label']][dataIndex]];
           }
           // If this item was a dropped score, add the tooltip message about that.
           for (var droppedIndex = 0; droppedIndex < droppedScores.length; droppedIndex++) {
-              if (tickIndex == droppedScores[droppedIndex][0]) {
+              if (tickIndex === droppedScores[droppedIndex][0]) {
                   yAxisTooltips[tickIndex].push(detail_tooltips["Dropped Scores"][droppedIndex]);
               }
           }
@@ -247,7 +246,7 @@ $(function () {
                             edx.HtmlUtils.HTML('<span class="sr">'),
                             elementTooltips[tooltipIndex],
                             edx.HtmlUtils.HTML('<br></span>')
-                        )
+                        );
                     }
                 }
                 ticks[i][1] = tickLabel;
@@ -292,7 +291,7 @@ $(function () {
               edx.HtmlUtils.HTML('<br></span>'),
               '${'{totalscore:.0%}'.format(totalscore=totalScore) | n, js_escaped_string}',
               edx.HtmlUtils.HTML('</div>')
-          )
+          );
       );
 
     %endif
@@ -310,7 +309,7 @@ $(function () {
 
     $grade_detail_graph.focusout(function(){
         $("#tooltip").remove();
-    })
+    });
   }
   
       
