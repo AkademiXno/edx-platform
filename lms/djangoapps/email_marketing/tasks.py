@@ -116,7 +116,7 @@ def update_user_email(self, new_email, old_email):
 
 # pylint: disable=not-callable
 @task(bind=True, default_retry_delay=3600, max_retries=24)
-def update_email_marketing_config_sailthru_user_list(self, domain):
+def update_marketing_config_list(self, domain):
     """
     Update Sailthru user list in email marketing config.
     """

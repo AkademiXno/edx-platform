@@ -19,7 +19,7 @@ from email_marketing.models import EmailMarketingConfiguration
 from util.model_utils import USER_FIELD_CHANGED
 from lms.djangoapps.email_marketing.tasks import (
     update_user, update_user_email, update_course_enrollment,
-    update_email_marketing_config_sailthru_user_list, create_sailthru_user_list
+    update_marketing_config_list, create_sailthru_user_list
 )
 
 from sailthru.sailthru_client import SailthruClient
@@ -159,7 +159,9 @@ def email_marketing_register_user(sender, user=None, profile=None,
     site_domain = _get_site_domain()
 
     # perform update asynchronously
-    update_user.delay(_create_sailthru_user_vars(user, user.profile), user.email, site_domain=site_domain, new_user=True)
+    update_user.delay(
+        _create_sailthru_user_vars(user, user.profile), user.email, site_domain=site_domain, new_user=True
+    )
 
 
 @receiver(USER_FIELD_CHANGED)
@@ -210,8 +212,9 @@ def email_marketing_user_field_changed(sender, user=None, table=None, setting=No
             return
         update_user_email.delay(user.email, old_value)
 
+
 @receiver(post_save, sender=Site)
-def email_marketing_new_site_added(sender, **kwargs):
+def email_marketing_new_site_added(sender, **kwargs):  # pylint: disable=unused-argument
     """
     update email marketing config on the addition of new site.
     """
@@ -223,11 +226,11 @@ def email_marketing_new_site_added(sender, **kwargs):
 
     user_lists = json.loads(email_config.sailthru_user_list)
     if not user_lists.get(instance.domain):
-        update_email_marketing_config_sailthru_user_list.delay(instance.domain)
+        update_marketing_config_list.delay(instance.domain)
 
 
 @receiver(post_save, sender=EmailMarketingConfiguration)
-def email_marketing_configuration_list(sender, **kwargs):
+def email_marketing_configuration_list(sender, **kwargs):  # pylint: disable=unused-argument
     """
     On creation of new email marketing configuration check if new sailthru
     list is added and create corresponding list in sailthru.
