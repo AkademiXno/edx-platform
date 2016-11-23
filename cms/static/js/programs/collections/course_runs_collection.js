@@ -2,13 +2,12 @@ define([
     'backbone',
     'jquery',
     'js/programs/utils/api_config',
-    'js/programs/collections/auto_auth_collection',
     'jquery.cookie'
 ],
-    function(Backbone, $, apiConfig, AutoAuthCollection) {
+    function(Backbone, $, apiConfig) {
         'use strict';
 
-        return AutoAuthCollection.extend({
+        return Backbone.Collection.extend({
             allRuns: [],
 
             initialize: function(models, options) {

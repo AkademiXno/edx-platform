@@ -94,9 +94,9 @@ def view_auth_classes(is_user=False, is_authenticated=True):
         If is_user is True, also requires username in URL matches the request user.
         """
         func_or_class.authentication_classes = (
+            SessionAuthenticationAllowInactiveUser,
             JwtAuthentication,
             OAuth2AuthenticationAllowInactiveUser,
-            SessionAuthenticationAllowInactiveUser
         )
         func_or_class.permission_classes = ()
         if is_authenticated:
