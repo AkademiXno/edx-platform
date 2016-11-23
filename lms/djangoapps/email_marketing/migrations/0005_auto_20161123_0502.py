@@ -15,7 +15,8 @@ def add_sailthru_user_list(apps, schema_editor):
             enabled=email_config.enabled,
             sailthru_key=email_config.sailthru_key,
             sailthru_secret=email_config.sailthru_secret,
-            sailthru_new_user_list=sailthru_user_lists,
+            sailthru_new_user_list=email_config.sailthru_new_user_list,
+            sailthru_user_list=sailthru_user_lists,
             sailthru_retry_interval=email_config.sailthru_retry_interval,
             sailthru_max_retries=email_config.sailthru_max_retries,
             sailthru_activation_template=email_config.sailthru_activation_template,
@@ -34,14 +35,15 @@ def add_sailthru_user_list(apps, schema_editor):
 
 def remove_sailthru_user_list(apps, schema_editor):
     sailthru_user_lists = get_user_list_json()
-    EmailMarketingConfiguration.objects.filter(sailthru_new_user_list=sailthru_user_lists, enabled=True).delete()
+    EmailMarketingConfiguration.objects.filter(sailthru_user_list=sailthru_user_lists, enabled=True).delete()
 
 
 def get_user_list_json():
     sites = Site.objects.all()
     sailthru_user_lists = {sites[0].domain: 'All edX Users'}
     for site in sites[1:]:
-        sailthru_user_lists[site.domain] = 'White Label Users'
+        domain_name = site.domain.split('.')[0]
+        sailthru_user_lists[site.domain] = domain_name + '_user_list'
 
     return json.dumps(sailthru_user_lists)
 
@@ -49,7 +51,7 @@ def get_user_list_json():
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('email_marketing', '0004_auto_20161121_0622'),
+        ('email_marketing', '0004_emailmarketingconfiguration_sailthru_user_list'),
     ]
 
     operations = [

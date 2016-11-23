@@ -11,9 +11,9 @@ class Migration(migrations.Migration):
     ]
 
     operations = [
-        migrations.AlterField(
+        migrations.AddField(
             model_name='emailmarketingconfiguration',
-            name='sailthru_new_user_list',
-            field=models.CharField(help_text='Sailthru list name to add new users to. ', max_length=512),
+            name='sailthru_user_list',
+            field=models.CharField(help_text='Sailthru list name to add new users to. ', max_length=512, blank=True),
         ),
     ]

@@ -1,20 +1,26 @@
 """
 This module contains signals needed for email integration
 """
-import logging
-import datetime
 import crum
+import datetime
+import json
+import logging
 
-from django.dispatch import receiver
+from django.contrib.sites.models import Site
 from django.core.urlresolvers import reverse
 from django.conf import settings
+from django.db.models.signals import post_save
+from django.dispatch import receiver
 
 from student.models import ENROLL_STATUS_CHANGE
 from student.cookies import CREATE_LOGON_COOKIE
 from student.views import REGISTER_USER
 from email_marketing.models import EmailMarketingConfiguration
 from util.model_utils import USER_FIELD_CHANGED
-from lms.djangoapps.email_marketing.tasks import update_user, update_user_email, update_course_enrollment
+from lms.djangoapps.email_marketing.tasks import (
+    update_user, update_user_email, update_course_enrollment,
+    update_email_marketing_config_sailthru_user_list, create_sailthru_user_list
+)
 
 from sailthru.sailthru_client import SailthruClient
 from sailthru.sailthru_error import SailthruClientError
@@ -151,11 +157,9 @@ def email_marketing_register_user(sender, user=None, profile=None,
         return
 
     site_domain = _get_site_domain()
-    if not site_domain:
-        return
 
     # perform update asynchronously
-    update_user.delay(_create_sailthru_user_vars(user, user.profile), user.email, site_domain, new_user=True)
+    update_user.delay(_create_sailthru_user_vars(user, user.profile), user.email, site_domain=site_domain, new_user=True)
 
 
 @receiver(USER_FIELD_CHANGED)
@@ -193,11 +197,9 @@ def email_marketing_user_field_changed(sender, user=None, table=None, setting=No
             return
 
         site_domain = _get_site_domain()
-        if not site_domain:
-            return
 
         # perform update asynchronously, flag if activation
-        update_user.delay(_create_sailthru_user_vars(user, user.profile), user.email, site_domain,
+        update_user.delay(_create_sailthru_user_vars(user, user.profile), user.email, site_domain=site_domain,
                           new_user=False,
                           activation=(setting == 'is_active') and new_value is True)
 
@@ -207,6 +209,35 @@ def email_marketing_user_field_changed(sender, user=None, table=None, setting=No
         if not email_config.enabled:
             return
         update_user_email.delay(user.email, old_value)
+
+@receiver(post_save, sender=Site)
+def email_marketing_new_site_added(sender, **kwargs):
+    """
+    update email marketing config on the addition of new site.
+    """
+    instance = kwargs['instance']
+
+    email_config = EmailMarketingConfiguration.current()
+    if not email_config.enabled:
+        return
+
+    user_lists = json.loads(email_config.sailthru_user_list)
+    if not user_lists.get(instance.domain):
+        update_email_marketing_config_sailthru_user_list.delay(instance.domain)
+
+
+@receiver(post_save, sender=EmailMarketingConfiguration)
+def email_marketing_configuration_list(sender, **kwargs):
+    """
+    On creation of new email marketing configuration check if new sailthru
+    list is added and create corresponding list in sailthru.
+    """
+    email_config = kwargs['instance']
+    if not email_config.enabled:
+        return
+
+    user_lists = json.loads(email_config.sailthru_user_list)
+    create_sailthru_user_list.delay(user_lists)
 
 
 def _create_sailthru_user_vars(user, profile):

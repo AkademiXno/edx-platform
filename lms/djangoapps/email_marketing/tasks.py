@@ -20,7 +20,7 @@ log = logging.getLogger(__name__)
 
 # pylint: disable=not-callable
 @task(bind=True, default_retry_delay=3600, max_retries=24)
-def update_user(self, sailthru_vars, email, site_domain, new_user=False, activation=False):
+def update_user(self, sailthru_vars, email, site_domain=None, new_user=False, activation=False):
     """
     Adds/updates Sailthru profile information for a user.
      Args:
@@ -114,7 +114,95 @@ def update_user_email(self, new_email, old_email):
                              max_retries=email_config.sailthru_max_retries)
 
 
-def _create_sailthru_user_parm(sailthru_vars, email, new_user, email_config, site_domain):
+# pylint: disable=not-callable
+@task(bind=True, default_retry_delay=3600, max_retries=24)
+def update_email_marketing_config_sailthru_user_list(self, domain):
+    """
+    Update Sailthru user list in email marketing config.
+    """
+    email_config = EmailMarketingConfiguration.current()
+    if not email_config.enabled:
+        return
+
+    user_lists = json.loads(email_config.sailthru_user_list)
+    if user_lists.get(domain):
+        return
+    try:
+        domain_name = domain.split('.')[0]
+        user_list_name = domain_name + '_user_list'
+        user_lists[domain] = user_list_name
+        user_lists = json.dumps(user_lists)
+        config = EmailMarketingConfiguration(
+            enabled=email_config.enabled,
+            sailthru_key=email_config.sailthru_key,
+            sailthru_secret=email_config.sailthru_secret,
+            sailthru_new_user_list=email_config.sailthru_new_user_list,
+            sailthru_user_list=user_lists,
+            sailthru_retry_interval=email_config.sailthru_retry_interval,
+            sailthru_max_retries=email_config.sailthru_max_retries,
+            sailthru_activation_template=email_config.sailthru_activation_template,
+            sailthru_abandoned_cart_template=email_config.sailthru_abandoned_cart_template,
+            sailthru_abandoned_cart_delay=email_config.sailthru_abandoned_cart_delay,
+            sailthru_enroll_template=email_config.sailthru_enroll_template,
+            sailthru_upgrade_template=email_config.sailthru_upgrade_template,
+            sailthru_purchase_template=email_config.sailthru_purchase_template,
+            sailthru_get_tags_from_sailthru=email_config.sailthru_get_tags_from_sailthru,
+            sailthru_content_cache_age=email_config.sailthru_content_cache_age,
+            sailthru_enroll_cost=email_config.sailthru_enroll_cost,
+            sailthru_lms_url_override=email_config.sailthru_lms_url_override
+        )
+        config.save()
+    except Exception as exc:  # pylint: disable=broad-except
+        log.error("Error saving email configuration")
+        raise self.retry(exc=exc,
+                         countdown=email_config.sailthru_retry_interval,
+                         max_retries=email_config.sailthru_max_retries)
+
+
+# pylint: disable=not-callable
+@task(bind=True, default_retry_delay=3600, max_retries=24)
+def create_sailthru_user_list(self, user_lists):
+    """Create sailthru user list if currently not exists"""
+    email_config = EmailMarketingConfiguration.current()
+    if not email_config.enabled:
+        return
+
+    sailthru_client = SailthruClient(email_config.sailthru_key, email_config.sailthru_secret)
+    try:
+        sailthru_get_response = sailthru_client.api_get("list", {})
+    except SailthruClientError as exc:
+        log.error("Exception getting list from Sailthru - %s", unicode(exc))
+        raise self.retry(exc=exc, countdown=email_config.sailthru_retry_interval,
+                         max_retries=email_config.sailthru_max_retries)
+
+    import pudb; pu.db
+    for key, value in user_lists.items():
+        list_exist = False
+        for user_list in sailthru_get_response.json['lists']:
+            if user_list.get('name') == value:
+                list_exist = True
+
+        import pudb; pu.db
+        if not list_exist:
+            list_params = {'list': value, 'primary': 0, 'public_name': value}
+            sailthru_client = SailthruClient(email_config.sailthru_key, email_config.sailthru_secret)
+            try:
+                sailthru_response = sailthru_client.api_post("list", list_params)
+            except SailthruClientError as exc:
+                log.error("Exception attempting to create list for %s in Sailthru - %s", key, unicode(exc))
+                raise self.retry(exc=exc,
+                                 countdown=email_config.sailthru_retry_interval,
+                                 max_retries=email_config.sailthru_max_retries)
+
+            if not sailthru_response.is_ok():
+                error = sailthru_response.get_error()
+                log.error("Error attempting to create list in Sailthru: %s", error.get_message())
+                if _retryable_sailthru_error(error):
+                    raise self.retry(countdown=email_config.sailthru_retry_interval,
+                                     max_retries=email_config.sailthru_max_retries)
+
+
+def _create_sailthru_user_parm(sailthru_vars, email, new_user, email_config, site_domain=None):
     """
     Create sailthru user create/update parms
     """
@@ -122,14 +210,18 @@ def _create_sailthru_user_parm(sailthru_vars, email, new_user, email_config, sit
     sailthru_user['vars'] = dict(sailthru_vars, last_changed_time=int(time.time()))
 
     # if new user add to list
-    if new_user and email_config.sailthru_new_user_list:
-        user_list = json.loads(email_config.sailthru_new_user_list)
-        user_list_name = user_list.get(site_domain)
-        if user_list_name:
-            sailthru_user['lists'] = {user_list_name: 1}
+    if new_user and email_config.sailthru_user_list:
+        user_lists = json.loads(email_config.sailthru_user_list)
+        if site_domain:
+            user_list_name = user_lists.get(site_domain)
+            if user_list_name:
+                sailthru_user['lists'] = {user_list_name: 1}
+            else:
+                site = Site.objects.get_current()
+                sailthru_user['lists'] = {user_lists.get(site.domain): 1}
         else:
             site = Site.objects.get_current()
-            sailthru_user['lists'] = {user_list.get(site.domain): 1}
+            sailthru_user['lists'] = {user_lists.get(site.domain): 1}
 
     return sailthru_user
 
