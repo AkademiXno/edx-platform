@@ -1,8 +1,9 @@
 <%page args="grade_summary, grade_cutoffs, graph_div_id, show_grade_breakdown = True, show_grade_cutoffs = True, **kwargs"/>
 <%!
+    import bleach
     import json
     import math
-    import bleach
+    
     from openedx.core.djangolib.js_utils import (
         dump_js_escaped_json, js_escaped_string
     )
@@ -10,6 +11,7 @@
 
 $(function () {
   function showTooltip(x, y, contents) {
+      $("#tooltip").remove();
       var $tooltip_div = $('<div id="tooltip"></div>').css({
               position: 'absolute',
               display: 'none',
@@ -24,7 +26,7 @@ $(function () {
 
       edx.HtmlUtils.setHtml(
           $tooltip_div,
-          edx.HtmlUtils.ensureHtml(contents)
+          edx.HtmlUtils.HTML(contents)
       );
       
       edx.HtmlUtils.append(
@@ -244,7 +246,7 @@ $(function () {
                             tickLabel,
                             edx.HtmlUtils.HTML('<span class="sr">'),
                             elementTooltips[tooltipIndex],
-                            edx.HtmlUtils.HTML('</span>')
+                            edx.HtmlUtils.HTML('<br></span>')
                         )
                     }
                 }
@@ -287,30 +289,40 @@ $(function () {
               edx.HtmlUtils.HTML('<div class="overallGrade" style="position:absolute;left:' + (o.left - 12) + 'px;top:' + (o.top - 20) + 'px">'),
               edx.HtmlUtils.HTML('<span class=sr>'),
               gettext('Overall Score'),
-              edx.HtmlUtils.HTML('</span>'),
+              edx.HtmlUtils.HTML('<br></span>'),
               '${'{totalscore:.0%}'.format(totalscore=totalScore) | n, js_escaped_string}',
               edx.HtmlUtils.HTML('</div>')
           )
       );
 
     %endif
+
+    $grade_detail_graph.find('.xAxis .tickLabel').attr('tabindex', '0').focus(function(event) {
+        var $target = $(event.target), srElements = $target.find('.sr'), srText="", i;
+        if (srElements.length > 0) {
+            for (i = 0; i < srElements.length; i++) {
+                srText += srElements[i].innerHTML;
+            }
+            // Position the tooltip slightly above the tick label.
+            showTooltip($target.offset().left - 70, $target.offset().top - 120, srText);
+        }
+    });
+
+    $grade_detail_graph.focusout(function(){
+        $("#tooltip").remove();
+    })
   }
   
       
   var previousPoint = null;
   $grade_detail_graph.bind("plothover", function (event, pos, item) {
-    $("#x").text(pos.x.toFixed(2));
-    $("#y").text(pos.y.toFixed(2));
     if (item) {
       if (previousPoint != (item.dataIndex, item.seriesIndex)) {
         previousPoint = (item.dataIndex, item.seriesIndex);
-
-        $("#tooltip").remove();
             
         if (item.series.label in detail_tooltips) {
           var series_tooltips = detail_tooltips[item.series.label];
           if (item.dataIndex < series_tooltips.length) {
-            var x = item.datapoint[0].toFixed(2), y = item.datapoint[1].toFixed(2);
             showTooltip(item.pageX, item.pageY, series_tooltips[item.dataIndex]);
           }
         }
