@@ -217,20 +217,6 @@ class CatalogCourseRunCacheUtility:
     CACHE_KEY_PREFIX = "catalog.course_runs."
 
     @classmethod
-    def get_cache_key_name(cls, course_key):
-        """
-        Returns key name to use to cache catalog course run data for course key.
-        """
-        return "{}{}".format(cls.CACHE_KEY_PREFIX, course_key)
-
-    @classmethod
-    def extract_course_key_from_cache_key_name(cls, catalog_course_run_cache_key):
-        """
-        Returns course_key extracted from cache key of catalog course run data.
-        """
-        return catalog_course_run_cache_key.replace(cls.CACHE_KEY_PREFIX, '')
-
-    @classmethod
     def get_course_keys_not_found_in_cache(cls, course_keys, cached_course_run_keys):
         """
         Get course key strings for which course run data is not available in cache.
@@ -247,12 +233,12 @@ class CatalogCourseRunCacheUtility:
         Get course runs from cache against course keys
         """
         course_catalog_run_cache_keys = [
-            cls.get_cache_key_name(course_key)
+            cls._get_cache_key_name(course_key)
             for course_key in course_keys
         ]
         cached_catalog_course_runs = cache.get_many(course_catalog_run_cache_keys)
         return {
-            cls.extract_course_key_from_cache_key_name(cached_key): cached_course_run
+            cls._extract_course_key_from_cache_key_name(cached_key): cached_course_run
             for cached_key, cached_course_run in cached_catalog_course_runs.iteritems()
         }
 
@@ -262,7 +248,21 @@ class CatalogCourseRunCacheUtility:
         Caches catalog course run for course key.
         """
         cache.set(
-            cls.get_cache_key_name(catalog_course_run["key"]),
+            cls._get_cache_key_name(catalog_course_run["key"]),
             catalog_course_run,
             None
         )
+
+    @classmethod
+    def _get_cache_key_name(cls, course_key):
+        """
+        Returns key name to use to cache catalog course run data for course key.
+        """
+        return "{}{}".format(cls.CACHE_KEY_PREFIX, course_key)
+
+    @classmethod
+    def _extract_course_key_from_cache_key_name(cls, catalog_course_run_cache_key):
+        """
+        Returns course_key extracted from cache key of catalog course run data.
+        """
+        return catalog_course_run_cache_key.replace(cls.CACHE_KEY_PREFIX, '')

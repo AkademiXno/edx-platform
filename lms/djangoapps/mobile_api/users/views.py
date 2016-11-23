@@ -272,7 +272,7 @@ class UserCourseEnrollmentsList(APIView):
         """
         queryset = CourseEnrollment.objects.all()
         course_ids = set(queryset.values_list('course_id', flat=True))
-        catalog_course_runs_against_course_keys = CourseEnrollmentSerializer.get_course_catalog_run(
+        catalog_course_runs_against_course_keys = CourseEnrollmentSerializer.get_catalog_course_runs(
             request.user, course_ids
         )
 

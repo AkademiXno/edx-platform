@@ -511,7 +511,7 @@ class TestCourseEnrollmentSerializer(MobileAPITestCase, MilestonesTestCaseMixin,
                 "test_key": "test_value",
             }]
         )
-        catalog_course_runs_against_course_keys = CourseEnrollmentSerializer.get_course_catalog_run(
+        catalog_course_runs_against_course_keys = CourseEnrollmentSerializer.get_catalog_course_runs(
             self.request.user, course_keys
         )
         enrollment = CourseEnrollment.enrollments_for_user(self.user)[0]
@@ -541,7 +541,7 @@ class TestCourseEnrollmentSerializer(MobileAPITestCase, MilestonesTestCaseMixin,
                 "test_key": "test_value",
             }]
         )
-        catalog_course_runs_against_course_keys = CourseEnrollmentSerializer.get_course_catalog_run(
+        catalog_course_runs_against_course_keys = CourseEnrollmentSerializer.get_catalog_course_runs(
             self.request.user, course_keys
         )
         enrollment = CourseEnrollment.enrollments_for_user(self.user)[0]

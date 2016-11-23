@@ -86,7 +86,7 @@ class CourseEnrollmentSerializer(serializers.ModelSerializer):
     certificate = serializers.SerializerMethodField()
 
     @classmethod
-    def get_course_catalog_run(cls, user, course_keys):
+    def get_catalog_course_runs(cls, user, course_keys):
         """
         Returns catalog runs against courses if marketing site is enabled.
         """
