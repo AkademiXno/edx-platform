@@ -291,7 +291,7 @@ $(function () {
               edx.HtmlUtils.HTML('<br></span>'),
               '${'{totalscore:.0%}'.format(totalscore=totalScore) | n, js_escaped_string}',
               edx.HtmlUtils.HTML('</div>')
-          );
+          )
       );
 
     %endif
