@@ -450,28 +450,15 @@ def compile_sass(options):
     """
     debug = options.get('debug')
     force = options.get('force')
-    systems = getattr(options, 'system', ALL_SYSTEMS)
-    themes = getattr(options, 'themes', [])
-    theme_dirs = getattr(options, 'theme-dirs', [])
+    systems = get_parsed_option(options, 'system', ALL_SYSTEMS)
+    themes = get_parsed_option(options, 'themes', [])
+    # option with hyphen(-) is converted to underscore(_) by `@cmdopts` so `theme_dirs` will be passed
+    # instead `theme-dirs`. Behavior mentioned in `cmdopts()` of python2.7/site-packages/paver/tasks.py.
+    theme_dirs = get_parsed_option(options, 'theme_dirs', [])
 
     if not theme_dirs and themes:
         # We can not compile a theme sass without knowing the directory that contains the theme.
         raise ValueError('theme-dirs must be provided for compiling theme sass.')
-
-    if isinstance(systems, basestring):
-        systems = systems.split(',')
-    else:
-        systems = systems if isinstance(systems, list) else [systems]
-
-    if isinstance(themes, basestring):
-        themes = themes.split(',')
-    else:
-        themes = themes if isinstance(themes, list) else [themes]
-
-    if isinstance(theme_dirs, basestring):
-        theme_dirs = theme_dirs.split(',')
-    else:
-        theme_dirs = theme_dirs if isinstance(theme_dirs, list) else [theme_dirs]
 
     if themes and theme_dirs:
         themes = get_theme_paths(themes=themes, theme_dirs=theme_dirs)
@@ -693,6 +680,28 @@ def execute_compile_sass(args):
         )
 
 
+def get_parsed_option(options, name, default=None):
+    """
+    Options to a command are provided as string value. Convert it to list where a list is expected
+    after fetching an option specified by name
+    Args:
+        options: Command line arguments passed via paver command.
+        name: name of option to parse
+        default: if option not in options, return default
+    """
+    option = default
+    try:
+        option = getattr(options, name)
+        if isinstance(option, basestring):
+            option = option.split(',')
+        else:
+            option = option if isinstance(option, list) else [option]
+    except AttributeError:
+        pass
+    finally:
+        return option
+
+
 @task
 @cmdopts([
     ('background', 'b', 'Background mode'),
@@ -708,19 +717,15 @@ def watch_assets(options):
     if tasks.environment.dry_run:
         return
 
-    themes = getattr(options, 'themes', None)
-    theme_dirs = getattr(options, 'theme-dirs', [])
-
+    themes = get_parsed_option(options, 'themes')
+    # option with hyphen(-) is converted to underscore(_) by `cmdopts` so `theme_dirs` will be passed
+    # instead `theme-dirs`. Behavior mentioned in `cmdopts()` of python2.7/site-packages/paver/tasks.py.
+    theme_dirs = get_parsed_option(options, 'theme_dirs', [])
     if not theme_dirs and themes:
         # We can not add theme sass watchers without knowing the directory that contains the themes.
         raise ValueError('theme-dirs must be provided for watching theme sass.')
     else:
         theme_dirs = [path(_dir) for _dir in theme_dirs]
-
-    if isinstance(themes, basestring):
-        themes = themes.split(',')
-    else:
-        themes = themes if isinstance(themes, list) else [themes]
 
     sass_directories = get_watcher_dirs(theme_dirs, themes)
     observer = PollingObserver()
@@ -808,5 +813,5 @@ def update_assets(args):
     if args.watch:
         call_task(
             'pavelib.assets.watch_assets',
-            options={'background': not args.debug, 'theme-dirs': args.theme_dirs, 'themes': args.themes},
+            options={'background': not args.debug, 'theme_dirs': args.theme_dirs, 'themes': args.themes},
         )
